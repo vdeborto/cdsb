@@ -338,7 +338,7 @@ class IPFBase(torch.nn.Module):
                                             'mean_init':mean_init, 'mean_final': mean_final,
                                             'T': self.T})
                 
-                self.plotter(batch, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond, i, n, fb)
+                self.plotter(batch_x, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond, i, n, fb)
 
                 
     def set_seed(self, seed=0):

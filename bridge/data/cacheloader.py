@@ -19,28 +19,38 @@ class CacheLoader(Dataset):
         start = time.time()
         shape = langevin.d
         num_steps = langevin.num_steps
-        self.data = torch.zeros((num_batches, batch_size*num_steps, 2, *shape)).to(device)#.cpu()
+        self.data = torch.zeros((num_batches, batch_size*num_steps, 3, *shape)).to(device)#.cpu()
         self.steps_data = torch.zeros((num_batches, batch_size*num_steps,1), dtype=torch.long).to(device)#.cpu() # steps
         with torch.no_grad():
             for b in range(num_batches):
                 if fb=='b':
                     batch = next(dataloader_b)[0]
-                    batch = batch.to(device)
+                    batch_x = batch[...,0]
+                    batch_y = batch[...,1]
+                    batch_x = batch_x.to(device)
+                    batch_y = batch_y.to(device)
                 elif fb =='f' and transfer:
                     batch = next(dataloader_f)[0]
-                    batch = batch.to(device)
-                else:
-                    batch = mean + std*torch.randn((batch_size, *shape), device=device)
+                    batch_x = batch[...,0]
+                    batch_y = batch[...,1]
+                    batch_x = batch_x.to(device)
+                    batch_y = batch_y.to(device)                    
+                else:                    
+                    batch_x = mean + std*torch.randn((batch_size, *shape), device=device)
+                    batch = next(dataloader_b)[0]
+                    batch_y = batch[..., 1]
+                    batch_y = batch_y.to(device)                    
                 
                 if (n == 1) & (fb=='b'):
-                    x, out, steps_expanded = langevin.record_init_langevin(batch)
+                    x, y, out, steps_expanded = langevin.record_init_langevin(batch_x, batch_y)
                 else:
-                    x, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch, ipf_it=n)
+                    x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n)
                 
                 # store x, out
                 x = x.unsqueeze(2)
+                y = y.unsqueeze(2)
                 out = out.unsqueeze(2)
-                batch_data = torch.cat((x, out), dim=2)
+                batch_data = torch.cat((x, y, out), dim=2)
                 flat_data = batch_data.flatten(start_dim=0, end_dim=1)
                 self.data[b] = flat_data 
                 
@@ -52,15 +62,16 @@ class CacheLoader(Dataset):
         self.steps_data = self.steps_data.flatten(start_dim=0, end_dim=1)
         
         stop = time.time()
-        print('Cache size: {0}'.format(self.data.shape))
-        print("Load time: {0}".format(stop-start))
+        # print('Cache size: {0}'.format(self.data.shape))
+        # print("Load time: {0}".format(stop-start))
     
     def __getitem__(self, index):
         item = self.data[index]
         x = item[0]
-        out = item[1]
+        y = item[1]
+        out = item[2]
         steps = self.steps_data[index]
-        return x, out, steps
+        return x, y, out, steps
 
     def __len__(self):
         return self.data.shape[0]

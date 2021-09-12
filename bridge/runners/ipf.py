@@ -70,7 +70,8 @@ class IPFBase(torch.nn.Module):
         time_sampler = torch.distributions.categorical.Categorical(prob_vec)
             
         batch = next(self.save_init_dl)[0]
-        shape = batch[0].shape
+        batch_x = batch[..., 0]
+        shape = batch_x[0].shape
         self.shape = shape
         self.langevin = Langevin(self.num_steps, shape, gammas, 
                                  time_sampler, device = self.device, 
@@ -195,11 +196,12 @@ class IPFBase(torch.nn.Module):
         
         
         # get plotter, gifs etc.
-        self.save_init_dl = DataLoader(init_ds, batch_size=self.args.plot_npar, shuffle=True, **self.kwargs)
+        self.save_init_dl = DataLoader(init_ds, batch_size=self.args.plot_npar, shuffle=True, **self.kwargs)        
         self.cache_init_dl = DataLoader(init_ds, batch_size=self.args.cache_npar, shuffle=True, **self.kwargs)
         (self.cache_init_dl, self.save_init_dl) = self.accelerator.prepare(self.cache_init_dl, self.save_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
         self.save_init_dl = repeater(self.save_init_dl)
+
 
         if self.args.transfer:
             self.save_final_dl = DataLoader(final_ds, batch_size=self.args.plot_npar, shuffle=True, **self.kwargs)
@@ -237,7 +239,7 @@ class IPFBase(torch.nn.Module):
             sample_net = self.accelerator.prepare(sample_net)
             new_dl = CacheLoader('f',
                             sample_net, 
-                            None, 
+                            self.cache_init_dl, 
                             self.args.num_cache_batches, 
                             self.langevin, n, 
                             mean = self.mean_final,
@@ -288,28 +290,49 @@ class IPFBase(torch.nn.Module):
                     self.set_seed(seed=0 + self.accelerator.process_index)
                     if fb == 'f':
                         batch = next(self.save_init_dl)[0]
-                        batch =  batch.to(self.device)
+                        batch_x = batch[...,0]
+                        batch_y = batch[...,1]
+                        batch_x = batch_x.to(self.device)
+                        batch_y = batch_y.to(self.device)                                            
                     elif self.args.transfer:
                         batch = next(self.save_final_dl)[0]
                         batch = batch.to(self.device)
                     else:
-                        batch = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape), device=self.device)
+                        batch_x = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape), device=self.device)
+                        batch = next(self.save_init_dl)[0]
+                        batch_y = batch[..., 1]
+                        batch_y = batch_y.to(self.device)                                            
                         
-                    x_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch, ipf_it=n, sample=True)                        
+                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
+                    y_cond = self.args.y_cond
+                    x_tot_cond = []
+                    for k in range(len(y_cond)):
+                        y_c = y_cond[k]
+                        batch_y = batch_y * 0 + y_c
+                        x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
+                        x_tot_cond.append(x_tot_c)
+                    
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
                     x_tot_plot = x_tot.detach()#.cpu().numpy()
-                    
+                    y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
+                    y_tot_plot = y_tot.detach()#.cpu().numpy()
 
-                init_x = batch.detach().cpu().numpy()
+                    for k in range(len(y_cond)):
+                        x_tot_c = x_tot_cond[k]
+                        x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
+                        x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()
+                        x_tot_cond[k] = x_tot_c_plot
+
+                init_x = batch_x.detach().cpu().numpy()
                 final_x = x_tot_plot[-1].detach().cpu().numpy()
                 std_final = np.std(final_x)
                 std_init = np.std(init_x)
                 mean_final = np.mean(final_x)
                 mean_init = np.mean(init_x)
                 
-                print('Initial variance: ' + str(std_init ** 2))
-                print('Final variance: ' + str(std_final ** 2))
+                # print('Initial variance: ' + str(std_init ** 2))
+                # print('Final variance: ' + str(std_final ** 2))
                 
                 
                 self.save_logger.log_metrics({'FB': fb, 
@@ -317,7 +340,7 @@ class IPFBase(torch.nn.Module):
                                             'mean_init':mean_init, 'mean_final': mean_final,
                                             'T': self.T})
                 
-                self.plotter(batch, x_tot_plot, i, n, fb)
+                self.plotter(batch, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond, i, n, fb)
 
                 
     def set_seed(self, seed=0):
@@ -348,16 +371,17 @@ class IPFSequential(IPFBase):
         for i in tqdm(range(self.num_iter+1)):
             self.set_seed(seed=n*self.num_iter+i)
 
-            x, out, steps_expanded = next(new_dl)
+            x, y, out, steps_expanded = next(new_dl)
             x = x.to(self.device)
+            y = y.to(self.device)
             out = out.to(self.device)
             steps_expanded = steps_expanded.to(self.device)
             eval_steps = self.num_steps - 1 - steps_expanded
 
             if self.args.mean_match:
-                pred = self.net[forward_or_backward](x, eval_steps) - x
+                pred = self.net[forward_or_backward](x, y, eval_steps) - x
             else:
-                pred = self.net[forward_or_backward](x, eval_steps) 
+                pred = self.net[forward_or_backward](x, y, eval_steps) 
 
             loss = F.mse_loss(pred, out)
             
@@ -399,18 +423,22 @@ class IPFSequential(IPFBase):
         # INITIAL FORWARD PASS
         if self.accelerator.is_local_main_process:
             init_sample = next(self.save_init_dl)[0]
-            init_sample = init_sample.to(self.device)
-            x_tot, _, _ = self.langevin.record_init_langevin(init_sample)
+            init_sample_x = init_sample[...,0]
+            init_sample_y = init_sample[...,1]
+            init_sample_x = init_sample_x.to(self.device)
+            init_sample_y = init_sample_y.to(self.device)
+            x_tot, y_tot, _, _ = self.langevin.record_init_langevin(init_sample_x, init_sample_y)
             shape_len = len(x_tot.shape)
             x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
             x_tot_plot = x_tot.detach()#.cpu().numpy()
+            y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
+            y_tot_plot = y_tot.detach()#.cpu().numpy()
             
-            self.plotter(init_sample, x_tot_plot, 0, 0, 'f')
+            self.plotter(init_sample, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
             x_tot_plot = None
             x_tot = None
             torch.cuda.empty_cache()
-
-
+            
         for n in range(self.checkpoint_it, self.n_ipf+1):
             
             print('IPF iteration: ' + str(n) + '/' + str(self.n_ipf))

@@ -41,11 +41,12 @@ class Langevin(torch.nn.Module):
         self.time_sampler = time_sampler
             
 
-    def record_init_langevin(self, init_samples):
+    def record_init_langevin(self, init_samples_x, init_samples_y):
         mean_final = self.mean_final
         var_final = self.var_final        
         
-        x = init_samples
+        x = init_samples_x
+        y = init_samples_y
         N = x.shape[0]
         steps = self.steps.reshape((1,self.num_steps,1)).repeat((N,1,1))
         time = self.time.reshape((1,self.num_steps,1)).repeat((N,1,1))
@@ -53,6 +54,7 @@ class Langevin(torch.nn.Module):
 
 
         x_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
+        y_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
         out = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
         store_steps = self.steps
         num_iter = self.num_steps
@@ -66,17 +68,18 @@ class Langevin(torch.nn.Module):
             x = t_old + torch.sqrt(2 * gamma)*z
             gradx = grad_gauss(x, mean_final, var_final)
             t_new = x + gamma * gradx
-            
             x_tot[:, k, :] = x
+            y_tot[:, k, :] = y
             out[:, k, :] = (t_old - t_new) #/ (2 * gamma)
             
-        return x_tot, out, steps_expanded
+        return x_tot, y_tot, out, steps_expanded
 
-    def record_langevin_seq(self, net, init_samples, t_batch=None, ipf_it=0, sample=False):
+    def record_langevin_seq(self, net, init_samples_x, init_samples_y, t_batch=None, ipf_it=0, sample=False):
         mean_final = self.mean_final
         var_final = self.var_final        
     
-        x = init_samples
+        x = init_samples_x
+        y = init_samples_y
         N = x.shape[0]
         steps = self.steps.reshape((1,self.num_steps,1)).repeat((N,1,1))
         time = self.time.reshape((1,self.num_steps,1)).repeat((N,1,1))
@@ -84,6 +87,7 @@ class Langevin(torch.nn.Module):
 
         
         x_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
+        y_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
         out = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
         store_steps = self.steps
         steps_expanded = steps
@@ -92,7 +96,7 @@ class Langevin(torch.nn.Module):
         if self.mean_match:
             for k in range(num_iter):
                 gamma = self.gammas[k]    
-                t_old = net(x, steps[:, k, :])
+                t_old = net(x, y, steps[:, k, :])
                 
                 if sample & (k==num_iter-1):
                     x = t_old
@@ -100,30 +104,32 @@ class Langevin(torch.nn.Module):
                     z = torch.randn(x.shape, device=x.device)
                     x = t_old + torch.sqrt(2 * gamma) * z
                     
-                t_new = net(x, steps[:, k, :])
+                t_new = net(x, y, steps[:, k, :])
                 x_tot[:, k, :] = x
+                y_tot[:, k, :] = y
                 out[:, k, :] = (t_old - t_new) 
         else:
             for k in range(num_iter):
                 gamma = self.gammas[k]    
-                t_old = x + net(x, steps[:, k, :])
+                t_old = x + net(x, y, steps[:, k, :])
                 
                 if sample & (k==num_iter-1):
                     x = t_old
                 else:
                     z = torch.randn(x.shape, device=x.device)
                     x = t_old + torch.sqrt(2 * gamma) * z
-                t_new = x + net(x, steps[:, k, :])
+                t_new = x + net(x, y, steps[:, k, :])
                 
                 x_tot[:, k, :] = x
+                y_tot[:, k, :] = y
                 out[:, k, :] = (t_old - t_new) 
             
 
-        return x_tot, out, steps_expanded
+        return x_tot, y_tot, out, steps_expanded
 
 
-    def forward(self, net, init_samples, t_batch, ipf_it):
-        return self.record_langevin_seq(net, init_samples, t_batch, ipf_it)
+    def forward(self, net, init_samples_x, init_samples_y, t_batch, ipf_it):
+        return self.record_langevin_seq(net, init_samples_x, init_samples_y, t_batch, ipf_it)
     
 
 

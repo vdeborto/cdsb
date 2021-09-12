@@ -1,10 +1,11 @@
 import torch
 from ..models import *
+from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
-from .plotters import TwoDPlotter, ImPlotter
+from .plotters import OneDCondPlotter, TwoDPlotter, ImPlotter
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -14,7 +15,9 @@ cmp = lambda x: transforms.Compose([*x])
 
 def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
-    if dataset_tag == DATASET_2D:
+    if dataset_tag == DATASET_1D_COND:
+        return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+    elif dataset_tag == DATASET_2D:
         return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
         return ImPlotter(plot_level = args.plot_level)
@@ -24,11 +27,15 @@ def get_plotter(runner, args):
 
 MODEL = 'Model'
 BASIC_MODEL = 'Basic'
+BASIC_MODEL_COND = 'BasicCond'
 UNET_MODEL = 'UNET'
 
 
 def get_models(args):
     model_tag = getattr(args, MODEL)
+
+    if model_tag == BASIC_MODEL_COND:
+        net_f, net_b = ScoreNetworkCond(), ScoreNetworkCond()
     
     if model_tag == BASIC_MODEL:
         net_f, net_b = ScoreNetwork(), ScoreNetwork()
@@ -80,6 +87,7 @@ def get_optimizers(net_f, net_b, lr):
 
 DATASET = 'Dataset'
 DATASET_TRANSFER = 'Dataset_transfer'
+DATASET_1D_COND = '1d_cond'
 DATASET_2D = '2d'
 DATASET_CELEBA = 'celeba'
 DATASET_STACKEDMNIST = 'stackedmnist'
@@ -94,6 +102,13 @@ def get_datasets(args):
         dataset_transfer_tag = None
     
     # INITIAL (DATA) DATASET
+
+    # 1D CONDITIONAL DATASET
+
+    if dataset_tag == DATASET_1D_COND:
+        data_tag = args.data
+        npar = max(args.npar, args.cache_npar)
+        init_ds = one_dim_cond_ds(npar, data_tag)    
 
     # 2D DATASET
     

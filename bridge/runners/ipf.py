@@ -69,10 +69,14 @@ class IPFBase(torch.nn.Module):
             prob_vec = gammas * 0 + 1
         time_sampler = torch.distributions.categorical.Categorical(prob_vec)
             
-        batch_x = next(self.save_init_dl)[0]
-        shape = batch_x[0].shape
-        self.shape = shape
-        self.langevin = Langevin(self.num_steps, shape, gammas, 
+        batch = next(self.save_init_dl)
+        batch_x = batch[0]
+        batch_y = batch[1]
+        shape_x = batch_x[0].shape
+        shape_y = batch_y[0].shape
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.langevin = Langevin(self.num_steps, shape_x, shape_y, gammas, 
                                  time_sampler, device = self.device, 
                                  mean_final=self.mean_final, var_final=self.var_final, 
                                  mean_match=self.args.mean_match)
@@ -297,7 +301,7 @@ class IPFBase(torch.nn.Module):
                         batch = next(self.save_final_dl)[0]
                         batch = batch.to(self.device)
                     else:
-                        batch_x = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape), device=self.device)
+                        batch_x = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape_x), device=self.device)
                         batch_y = next(self.save_init_dl)[1]
                         batch_y = batch_y.to(self.device)                                            
                         

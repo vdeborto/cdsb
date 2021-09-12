@@ -1,5 +1,6 @@
 import torch
 from ..models import *
+from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Stacked_MNIST
@@ -17,6 +18,9 @@ def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
         return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+    elif dataset_tag == DATASET_BIOCHEMICAL:
+        return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        # return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_2D:
         return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
@@ -32,10 +36,19 @@ UNET_MODEL = 'UNET'
 
 
 def get_models(args):
+    if "x_dim" in args:
+        x_dim = args.x_dim
+    else:
+        x_dim = 1
+    if "y_dim" in args:
+        y_dim = args.y_dim
+    else:
+        y_dim = 1
+        
     model_tag = getattr(args, MODEL)
 
     if model_tag == BASIC_MODEL_COND:
-        net_f, net_b = ScoreNetworkCond(), ScoreNetworkCond()
+        net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim), ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim)
     
     if model_tag == BASIC_MODEL:
         net_f, net_b = ScoreNetwork(), ScoreNetwork()
@@ -88,6 +101,7 @@ def get_optimizers(net_f, net_b, lr):
 DATASET = 'Dataset'
 DATASET_TRANSFER = 'Dataset_transfer'
 DATASET_1D_COND = '1d_cond'
+DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_2D = '2d'
 DATASET_CELEBA = 'celeba'
 DATASET_STACKEDMNIST = 'stackedmnist'
@@ -103,8 +117,15 @@ def get_datasets(args):
     
     # INITIAL (DATA) DATASET
 
-    # 1D CONDITIONAL DATASET
+    # BIOCHEMICAL
 
+    if dataset_tag == DATASET_BIOCHEMICAL:
+        data_tag = args.data
+        npar = max(args.npar, args.cache_npar)
+        init_ds = biochemical_ds(npar, data_tag)
+        
+    # 1D CONDITIONAL DATASET        
+    
     if dataset_tag == DATASET_1D_COND:
         data_tag = args.data
         npar = max(args.npar, args.cache_npar)

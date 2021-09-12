@@ -17,9 +17,11 @@ class CacheLoader(Dataset):
 
         super().__init__()
         start = time.time()
-        shape = langevin.d
+        shape_x = langevin.d_x
+        shape_y = langevin.d_y
         num_steps = langevin.num_steps
-        self.data = torch.zeros((num_batches, batch_size*num_steps, 3, *shape)).to(device)#.cpu()
+        self.data = torch.zeros((num_batches, batch_size*num_steps, 2, *shape_x)).to(device)#.cpu()
+        self.data_y = torch.zeros((num_batches, batch_size*num_steps, 1, *shape_y)).to(device)#.cpu()
         self.steps_data = torch.zeros((num_batches, batch_size*num_steps,1), dtype=torch.long).to(device)#.cpu() # steps
         with torch.no_grad():
             for b in range(num_batches):
@@ -36,7 +38,7 @@ class CacheLoader(Dataset):
                     batch_x = batch_x.to(device)
                     batch_y = batch_y.to(device)                    
                 else:                    
-                    batch_x = mean + std*torch.randn((batch_size, *shape), device=device)
+                    batch_x = mean + std*torch.randn((batch_size, *shape_x), device=device)
                     batch_y = next(dataloader_b)[1]                    
                     batch_y = batch_y.to(device)                    
                 
@@ -49,15 +51,19 @@ class CacheLoader(Dataset):
                 x = x.unsqueeze(2)
                 y = y.unsqueeze(2)
                 out = out.unsqueeze(2)
-                batch_data = torch.cat((x, y, out), dim=2)
+                batch_data = torch.cat((x, out), dim=2)
+                batch_data_y = y
                 flat_data = batch_data.flatten(start_dim=0, end_dim=1)
-                self.data[b] = flat_data 
+                flat_data_y = batch_data_y.flatten(start_dim=0, end_dim=1)
+                self.data[b] = flat_data
+                self.data_y[b] = flat_data_y 
                 
                 # store steps
                 flat_steps = steps_expanded.flatten(start_dim=0, end_dim=1)
                 self.steps_data[b] = flat_steps 
-        
+
         self.data = self.data.flatten(start_dim=0, end_dim=1)
+        self.data_y = self.data_y.flatten(start_dim=0, end_dim=1)
         self.steps_data = self.steps_data.flatten(start_dim=0, end_dim=1)
         
         stop = time.time()
@@ -66,9 +72,10 @@ class CacheLoader(Dataset):
     
     def __getitem__(self, index):
         item = self.data[index]
+        item_y = self.data_y[index]
         x = item[0]
-        y = item[1]
-        out = item[2]
+        out = item[1]
+        y = item[0]
         steps = self.steps_data[index]
         return x, y, out, steps
 

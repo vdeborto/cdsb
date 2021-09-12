@@ -15,7 +15,7 @@ def ornstein_ulhenbeck(x, gradx, gamma):
 
 class Langevin(torch.nn.Module):
 
-    def __init__(self, num_steps, shape, gammas, time_sampler, device = None, 
+    def __init__(self, num_steps, shape_x, shape_y, gammas, time_sampler, device = None, 
                  mean_final=torch.tensor([0.,0.]), var_final=torch.tensor([.5, .5]), mean_match=True):
         super().__init__()
 
@@ -24,9 +24,10 @@ class Langevin(torch.nn.Module):
         self.var_final = var_final
         
         self.num_steps = num_steps # num diffusion steps
-        self.d = shape # shape of object to diffuse
+        self.d_x = shape_x # dimension of object to diffuse
+        self.d_y = shape_y # dimension of conditioning
         self.gammas = gammas.float() # schedule
-        gammas_vec = torch.ones(self.num_steps,*self.d,device=device)
+        gammas_vec = torch.ones(self.num_steps,*self.d_x,device=device)
         for k in range(num_steps):
             gammas_vec[k] = gammas[k].float()
         self.gammas_vec = gammas_vec    
@@ -53,9 +54,9 @@ class Langevin(torch.nn.Module):
         gammas = self.gammas.reshape((1,self.num_steps,1)).repeat((N,1,1))
 
 
-        x_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
-        y_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
-        out = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
+        x_tot = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
+        y_tot = torch.Tensor(N, self.num_steps, *self.d_y).to(x.device)
+        out = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
         store_steps = self.steps
         num_iter = self.num_steps
         steps_expanded = steps
@@ -86,9 +87,9 @@ class Langevin(torch.nn.Module):
         gammas = self.gammas.reshape((1,self.num_steps,1)).repeat((N,1,1))
 
         
-        x_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
-        y_tot = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
-        out = torch.Tensor(N, self.num_steps, *self.d).to(x.device)
+        x_tot = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
+        y_tot = torch.Tensor(N, self.num_steps, *self.d_y).to(x.device)
+        out = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
         store_steps = self.steps
         steps_expanded = steps
         num_iter = self.num_steps

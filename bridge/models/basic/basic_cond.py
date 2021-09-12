@@ -35,11 +35,11 @@ class ScoreNetworkCond(torch.nn.Module):
             x = x.unsqueeze(0)
         if len(y.shape) == 1:
             y = y.unsqueeze(0)
-            
+
         temb = get_timestep_embedding(t, self.temb_dim)
         temb = self.t_encoder(temb)
         xemb = self.x_encoder(x)
-        yemb = self.x_encoder(y)
+        yemb = self.y_encoder(y)
         h = torch.cat([xemb , yemb, temb], -1)
         out = self.net(h) 
         return out

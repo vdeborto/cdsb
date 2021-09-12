@@ -409,7 +409,7 @@ class IPFSequential(IPFBase):
                 self.ema_helpers[forward_or_backward].update(self.net[forward_or_backward])
             
 
-            self.save_step(i, n, forward_or_backward)
+            # self.save_step(i, n, forward_or_backward)
             
             if (i % self.args.cache_refresh_stride == 0) and (i > 0):
                 new_dl = None
@@ -436,10 +436,10 @@ class IPFSequential(IPFBase):
             y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
             y_tot_plot = y_tot.detach()#.cpu().numpy()
             
-            self.plotter(init_sample, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
-            x_tot_plot = None
-            x_tot = None
-            torch.cuda.empty_cache()
+            # self.plotter(init_sample, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
+            # x_tot_plot = None
+            # x_tot = None
+            # torch.cuda.empty_cache()
             
         for n in range(self.checkpoint_it, self.n_ipf+1):
             

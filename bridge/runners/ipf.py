@@ -308,6 +308,7 @@ class IPFBase(torch.nn.Module):
                     x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
                     y_cond = self.args.y_cond
                     x_tot_cond = []
+                    import pdb; pdb.set_trace()
                     for k in range(len(y_cond)):
                         y_c = y_cond[k]
                         batch_y = batch_y * 0 + y_c

@@ -75,7 +75,7 @@ class CacheLoader(Dataset):
         item_y = self.data_y[index]
         x = item[0]
         out = item[1]
-        y = item[0]
+        y = item_y[0]
         steps = self.steps_data[index]
         return x, y, out, steps
 

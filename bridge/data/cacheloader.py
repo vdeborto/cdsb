@@ -24,21 +24,20 @@ class CacheLoader(Dataset):
         with torch.no_grad():
             for b in range(num_batches):
                 if fb=='b':
-                    batch = next(dataloader_b)[0]
-                    batch_x = batch[...,0]
-                    batch_y = batch[...,1]
+                    batch = next(dataloader_b)
+                    batch_x = batch[0]
+                    batch_y = batch[1]
                     batch_x = batch_x.to(device)
                     batch_y = batch_y.to(device)
                 elif fb =='f' and transfer:
-                    batch = next(dataloader_f)[0]
-                    batch_x = batch[...,0]
-                    batch_y = batch[...,1]
+                    batch = next(dataloader_f)
+                    batch_x = batch[0]
+                    batch_y = batch[1]
                     batch_x = batch_x.to(device)
                     batch_y = batch_y.to(device)                    
                 else:                    
                     batch_x = mean + std*torch.randn((batch_size, *shape), device=device)
-                    batch = next(dataloader_b)[0]
-                    batch_y = batch[..., 1]
+                    batch_y = next(dataloader_b)[1]                    
                     batch_y = batch_y.to(device)                    
                 
                 if (n == 1) & (fb=='b'):

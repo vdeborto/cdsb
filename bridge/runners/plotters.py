@@ -52,9 +52,9 @@ def save_sequence_cond(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, n
         filename = os.path.join(im_dir, filename)
         N_APPROX = 10
         for n in range(N_APPROX):
-            batch = next(init_dl)[0]
-            batch_x = batch[..., 0]
-            batch_y = batch[..., 1]
+            batch = next(init_dl)
+            batch_x = batch[0]
+            batch_y = batch[1]
             val_x = torch.cat((val_x, batch_x), 0)
             val_y = torch.cat((val_y, batch_y), 0)
         val_x = val_x.cpu().numpy()

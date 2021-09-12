@@ -10,7 +10,6 @@ def data_distrib(npar, data):
 
     y = 6. * torch.rand(npar, 1) - 3.
     tanh = torch.nn.Tanh()
-    init_sample = torch.zeros((npar, 1, 2))
     
     if data == 'type1':
         gamma_dis = torch.distributions.gamma.Gamma(0.3, 1)                
@@ -27,14 +26,15 @@ def data_distrib(npar, data):
         gamma = gamma_dis.sample_n(npar).reshape(npar, 1)
         x = gamma * tanh(y)
 
-    init_sample[...,0] = x
-    init_sample[...,1] = y
+    init_sample_x = x
+    init_sample_y = y
         
-    init_sample = init_sample.float()
+    init_sample_x = init_sample_x.float()
+    init_sample_y = init_sample_y.float()
 
-    return init_sample
+    return init_sample_x, init_sample_y
 
 def one_dim_cond_ds(npar, data_tag):
-    init_sample = data_distrib(npar, data_tag)
-    init_ds = TensorDataset(init_sample)
+    init_sample_x, init_sample_y = data_distrib(npar, data_tag)
+    init_ds = TensorDataset(init_sample_x, init_sample_y)
     return init_ds

@@ -69,8 +69,7 @@ class IPFBase(torch.nn.Module):
             prob_vec = gammas * 0 + 1
         time_sampler = torch.distributions.categorical.Categorical(prob_vec)
             
-        batch = next(self.save_init_dl)[0]
-        batch_x = batch[..., 0]
+        batch_x = next(self.save_init_dl)[0]
         shape = batch_x[0].shape
         self.shape = shape
         self.langevin = Langevin(self.num_steps, shape, gammas, 
@@ -289,9 +288,9 @@ class IPFBase(torch.nn.Module):
                 with torch.no_grad():
                     self.set_seed(seed=0 + self.accelerator.process_index)
                     if fb == 'f':
-                        batch = next(self.save_init_dl)[0]
-                        batch_x = batch[...,0]
-                        batch_y = batch[...,1]
+                        batch = next(self.save_init_dl)
+                        batch_x = batch[0]
+                        batch_y = batch[1]
                         batch_x = batch_x.to(self.device)
                         batch_y = batch_y.to(self.device)                                            
                     elif self.args.transfer:
@@ -299,8 +298,7 @@ class IPFBase(torch.nn.Module):
                         batch = batch.to(self.device)
                     else:
                         batch_x = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape), device=self.device)
-                        batch = next(self.save_init_dl)[0]
-                        batch_y = batch[..., 1]
+                        batch_y = next(self.save_init_dl)[1]
                         batch_y = batch_y.to(self.device)                                            
                         
                     x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
@@ -422,9 +420,9 @@ class IPFSequential(IPFBase):
         
         # INITIAL FORWARD PASS
         if self.accelerator.is_local_main_process:
-            init_sample = next(self.save_init_dl)[0]
-            init_sample_x = init_sample[...,0]
-            init_sample_y = init_sample[...,1]
+            init_sample = next(self.save_init_dl)
+            init_sample_x = init_sample[0]
+            init_sample_y = init_sample[1]
             init_sample_x = init_sample_x.to(self.device)
             init_sample_y = init_sample_y.to(self.device)
             x_tot, y_tot, _, _ = self.langevin.record_init_langevin(init_sample_x, init_sample_y)

@@ -308,9 +308,8 @@ class IPFBase(torch.nn.Module):
                     x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
                     y_cond = self.args.y_cond
                     x_tot_cond = []
-                    import pdb; pdb.set_trace()
                     for k in range(len(y_cond)):
-                        y_c = y_cond[k]
+                        y_c = torch.Tensor(y_cond[k])
                         batch_y = batch_y * 0 + y_c
                         x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
                         x_tot_cond.append(x_tot_c)
@@ -410,7 +409,7 @@ class IPFSequential(IPFBase):
                 self.ema_helpers[forward_or_backward].update(self.net[forward_or_backward])
             
 
-            # self.save_step(i, n, forward_or_backward)
+            self.save_step(i, n, forward_or_backward)
             
             if (i % self.args.cache_refresh_stride == 0) and (i > 0):
                 new_dl = None

@@ -22,9 +22,39 @@ def make_gif(plot_paths, output_directory='./gif', gif_name='gif'):
                    save_all=True,
                    duration=100,
                    loop=0)
+    
+def save_sequence_cond_biochemical(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
 
+    xlim = [-0.5, 1.5]
+    ylim = [-0.5, 2.5]
+    npts = 100
 
-def save_sequence_cond(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
+    x_tot = x_tot_cond[0].cpu().numpy()    
+    
+    # DENSITY
+    # ROLES OF X AND Y inversed when compared to Conditional Sampling.
+    
+    name_gif = name + 'density'
+    plot_paths_reg = []
+    for k in range(num_steps):
+        if k % freq == 0:
+            filename =  name + 'density_' + str(k) + '.png'
+            filename = os.path.join(im_dir, filename)
+            plt.clf()            
+            if ipf_it is not None:
+                str_title = 'IPFP iteration: ' + str(ipf_it)
+                plt.title(str_title)
+            k = kde.gaussian_kde([x_tot[k, :, 0],x_tot[k, :, 1]])
+            xi, yi = np.mgrid[xlim[0]:xlim[1]:npts*1j, ylim[0]:ylim[1]:npts*1j]
+            zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+            plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+            plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
+            plot_paths_reg.append(filename)
+
+    make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)    
+    
+
+def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
 
     ylim = [-3, 3]
     npts = 100
@@ -236,7 +266,41 @@ class OneDCondPlotter(Plotter):
         y_tot_plot = y_tot_plot.cpu().numpy()
         name = str(i) + '_' + fb +'_' + str(n) + '_'
 
-        save_sequence_cond(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
+        save_sequence_cond_1d(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
+                           data=data, init_dl=init_dl, y_cond=y_cond,
+                           x_tot_cond=x_tot_cond, fb=fb, name=name,
+                           ipf_it=ipf_it,
+                           freq=self.num_steps//min(self.num_steps,50),
+                           im_dir=self.im_dir, gif_dir=self.gif_dir)
+
+
+    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+        self.plot(initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
+
+
+class BiochemicalPlotter(Plotter):
+
+    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
+
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
+        if not os.path.isdir(gif_dir):
+            os.mkdir(gif_dir)
+
+        self.im_dir = im_dir
+        self.gif_dir = gif_dir
+
+        self.num_steps = num_steps
+        self.gammas = gammas
+
+    def plot(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+        fb = forward_or_backward
+        ipf_it = n
+        x_tot_plot = x_tot_plot.cpu().numpy()
+        y_tot_plot = y_tot_plot.cpu().numpy()
+        name = str(i) + '_' + fb +'_' + str(n) + '_'
+
+        save_sequence_cond_biochemical(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
                            data=data, init_dl=init_dl, y_cond=y_cond,
                            x_tot_cond=x_tot_cond, fb=fb, name=name,
                            ipf_it=ipf_it,

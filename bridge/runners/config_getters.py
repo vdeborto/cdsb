@@ -6,7 +6,7 @@ from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
-from .plotters import OneDCondPlotter, TwoDPlotter, ImPlotter
+from .plotters import OneDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -19,8 +19,7 @@ def get_plotter(runner, args):
     if dataset_tag == DATASET_1D_COND:
         return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_BIOCHEMICAL:
-        return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
-        # return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_2D:
         return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:

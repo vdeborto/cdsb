@@ -12,7 +12,7 @@ def data_distrib(npar, data):
     tanh = torch.nn.Tanh()
     
     if data == 'type1':
-        gamma_dis = torch.distributions.gamma.Gamma(0.3, 1)                
+        gamma_dis = torch.distributions.gamma.Gamma(1, 1/0.3)
         gamma = gamma_dis.sample_n(npar).reshape(npar, 1)
         x = tanh(y) + gamma
 
@@ -22,7 +22,7 @@ def data_distrib(npar, data):
         x = tanh(y + gamma)
 
     if data == 'type3':
-        gamma_dis = torch.distributions.gamma.Gamma(0.3, 1)                
+        gamma_dis = torch.distributions.gamma.Gamma(1, 1/0.3)
         gamma = gamma_dis.sample_n(npar).reshape(npar, 1)
         x = gamma * tanh(y)
 

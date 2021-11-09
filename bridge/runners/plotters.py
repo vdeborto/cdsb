@@ -7,7 +7,7 @@ from PIL import Image
 from ..data.two_dim import data_distrib
 import os, sys
 matplotlib.use('Agg')
-from scipy.stats import kde, gamma
+from scipy.stats import kde, gamma, norm
 
 
 
@@ -57,19 +57,25 @@ def save_sequence_cond_biochemical(num_steps, x, y, data, init_dl, y_cond, x_tot
 def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
 
     ylim = [-3, 3]
-    npts = 100
+    npts = 250
     if data == 'type1':
         xlim = [-1,3]
-        y_cond = [-1.2, 0, 1.2]
-        colors = ['green', 'orange', 'blue']
+        # true_pdf = lambda xy: 1/6 * gamma.pdf(xy[:, 0] - np.tanh(xy[:, 1]), 1, scale=0.3)
+        colors = ['red', 'green', 'blue']
     elif data == 'type2':
-        xlim = [-.95,.95]
-        y_cond = [-1.2, 0, 1.2]
-        colors = ['green', 'orange', 'blue']
+        xlim = [-1,1]
+        # def true_pdf(xy):
+        #     x_pyt = torch.from_numpy(xy[:, 0])
+        #     y_pyt = torch.from_numpy(xy[:, 1])
+        #     base_distribution = torch.distributions.Normal(y_pyt, np.sqrt(0.05))
+        #     transforms = [torch.distributions.transforms.TanhTransform()]
+        #     return 1/6 * torch.distributions.TransformedDistribution(
+        #         base_distribution, transforms).log_prob(x_pyt).exp().numpy()
+        colors = ['red', 'green', 'blue']
     else:
         xlim = [-0.8,0.8]
-        y_cond = [-1.2, 1.2]
-        colors = ['green', 'orange']
+        # true_pdf = lambda xy: 1/6 * gamma.pdf(xy[:, 0] / np.tanh(xy[:, 1]), 1, scale=0.3)
+        colors = ['red', 'blue']
     
     # DENSITY
     # ROLES OF X AND Y inversed when compared to Conditional Sampling.
@@ -77,7 +83,7 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
     val_x = torch.zeros(0,1)
     val_y = torch.zeros(0,1)
     
-    if ipf_it == 0:
+    if ipf_it == 1 and fb == "b":
         filename = 'original_density.png'
         filename = os.path.join(im_dir, filename)
         N_APPROX = 10
@@ -120,35 +126,45 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
     abc = torch.zeros(0, 1)
 
     if fb == 'b':
+        x_lin = np.linspace(xlim[0], xlim[1], npts)
+        zs_lin = np.zeros([0, npts])
+
         for n in range(len(y_cond)):
             y_c = y_cond[n]
-            x_lin = np.linspace(xlim[0],xlim[1],npts)
 
             if data == 'type1':
-                z = gamma.pdf(x_lin, 0.3, loc=np.tanh(y_c), scale=1)
+                z = gamma.pdf(x_lin - np.tanh(y_c), 1, scale=0.3)
             elif data == 'type2':
                 sigma = np.sqrt(0.05)
-                z1 = (1 - x_lin ** 2)**(-1)/sigma
-                z2 = (np.arctanh(x_lin) - y_c)/sigma
-                z3 = np.sqrt(2 * np.pi) ** (-1) * np.exp(-z2**2)
+                z1 = 1 / (1 - x_lin**2)
+                z2 = np.arctanh(x_lin)
+                z3 = norm.pdf(z2, loc=y_c, scale=sigma)
                 z = z3 * z1
+            elif data == 'type3':
+                z = gamma.pdf(x_lin / np.tanh(y_c), 1, scale=0.3)
 
-            for k in range(num_steps):
-                if k % freq == 0:
-                    filename =  name + 'histogram_' + str(n) + '_' + str(k) + '.png'
-                    filename = os.path.join(im_dir, filename)
-                    plt.clf()            
-                    if ipf_it is not None:
-                        str_title = 'IPFP iteration: ' + str(ipf_it)
-                        plt.title(str_title)
+            zs_lin = np.vstack([zs_lin, z])
+
+        for k in range(num_steps):
+            if k % freq == 0:
+                plt.clf()
+                for n in range(len(y_cond)):
+                    y_c = y_cond[n]
 
                     x_cond = x_tot_cond[n][k, :, 0]
                     x_cond_np = x_cond.cpu().numpy()
-                    plt.clf()
-                    plt.plot(x_lin, z)
-                    plt.hist(x_cond_np, bins=30, range=(xlim[0], xlim[1]), density=True)
-                    plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
-                    plot_paths_reg.append(filename)
+
+                    plt.plot(x_lin, zs_lin[n], color=colors[n])
+                    plt.hist(x_cond_np, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[n])
+
+                filename = name + 'histogram_' + str(k) + '.png'
+                filename = os.path.join(im_dir, filename)
+
+                if ipf_it is not None:
+                    str_title = 'IPFP iteration: ' + str(ipf_it)
+                    plt.title(str_title)
+                plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
+                plot_paths_reg.append(filename)
     
     
 class Plotter(object):

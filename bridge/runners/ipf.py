@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
-from .config_getters import get_models, get_optimizers, get_datasets, get_plotter, get_logger
+from .config_getters import get_models, get_optimizers, get_datasets, get_plotter, get_logger, get_tester
 import datetime
 from tqdm import tqdm
 from .ema import EMAHelper
@@ -54,8 +54,8 @@ class IPFBase(torch.nn.Module):
         self.build_optimizers()
 
         # get loggers
-        self.logger = self.get_logger()
-        self.save_logger = self.get_logger('plot_logs')
+        self.logger = self.get_logger('train_logs')
+        self.save_logger = self.get_logger('test_logs')
       
         # get data
         self.build_dataloaders()
@@ -97,7 +97,9 @@ class IPFBase(torch.nn.Module):
         
         self.plotter = self.get_plotter()
 
-        if self.accelerator.process_index == 0:
+        self.tester = self.get_tester()
+
+        if self.accelerator.is_main_process:
             if not os.path.exists('./im'):
                 os.mkdir('./im')
             if not os.path.exists('./gif'):
@@ -115,6 +117,9 @@ class IPFBase(torch.nn.Module):
 
     def get_plotter(self):
         return get_plotter(self, self.args)
+
+    def get_tester(self):
+        return get_tester(self, self.args)
 
     def build_models(self, forward_or_backward=None):
         # running network
@@ -195,20 +200,23 @@ class IPFBase(torch.nn.Module):
 
         self.kwargs = {"num_workers": self.args.num_workers, 
                        "pin_memory": self.args.pin_memory, 
-                       "worker_init_fn": worker_init_fn}
-        
+                       "worker_init_fn": worker_init_fn,
+                       'drop_last': True}
+
+        self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(init_ds))
+        self.cache_npar = min(self.args.cache_npar, len(init_ds))
         
         # get plotter, gifs etc.
-        self.save_init_dl = DataLoader(init_ds, batch_size=self.args.plot_npar, shuffle=True, **self.kwargs)        
-        self.cache_init_dl = DataLoader(init_ds, batch_size=self.args.cache_npar, shuffle=True, **self.kwargs)
+        self.save_init_dl = DataLoader(init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+        self.cache_init_dl = DataLoader(init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
         (self.cache_init_dl, self.save_init_dl) = self.accelerator.prepare(self.cache_init_dl, self.save_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
         self.save_init_dl = repeater(self.save_init_dl)
 
 
         if self.args.transfer:
-            self.save_final_dl = DataLoader(final_ds, batch_size=self.args.plot_npar, shuffle=True, **self.kwargs)
-            self.cache_final_dl = DataLoader(final_ds, batch_size=self.args.cache_npar, shuffle=True, **self.kwargs)
+            self.save_final_dl = DataLoader(final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+            self.cache_final_dl = DataLoader(final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
             (self.cache_final_dl, self.save_final_dl) = self.accelerator.prepare(self.cache_final_dl, self.save_final_dl)
             self.cache_final_dl = repeater(self.cache_final_dl)
             self.save_final_dl = repeater(self.save_final_dl)
@@ -233,7 +241,7 @@ class IPFBase(torch.nn.Module):
                                 self.langevin, n, 
                                 mean = None,
                                 std = None,
-                                batch_size=self.args.cache_npar,
+                                batch_size=self.cache_npar,
                                 device=self.device,
                                 dataloader_f=self.cache_final_dl,
                                 transfer=self.args.transfer)
@@ -247,7 +255,7 @@ class IPFBase(torch.nn.Module):
                             self.langevin, n, 
                             mean = self.mean_final,
                             std = self.std_final,
-                            batch_size = self.args.cache_npar,
+                            batch_size = self.cache_npar,
                             device=self.device,
                             dataloader_f=self.cache_final_dl,
                             transfer=self.args.transfer)
@@ -264,8 +272,8 @@ class IPFBase(torch.nn.Module):
         pass
 
     def save_step(self,i, n, fb):
-        if self.accelerator.is_local_main_process:
-            if ((i % self.stride == 0) or (i % self.stride == 1)) and (i > 0):
+        if self.accelerator.is_main_process:
+            if i % self.stride == 0:
                 
                 if self.args.ema:
                     sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
@@ -301,48 +309,41 @@ class IPFBase(torch.nn.Module):
                         batch = next(self.save_final_dl)[0]
                         batch = batch.to(self.device)
                     else:
-                        batch_x = self.mean_final + self.std_final*torch.randn((self.args.plot_npar, *self.shape_x), device=self.device)
+                        batch_x = self.mean_final + self.std_final*torch.randn((self.save_npar, *self.shape_x), device=self.device)
                         batch_y = next(self.save_init_dl)[1]
                         batch_y = batch_y.to(self.device)                                            
                         
                     x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
                     y_cond = self.args.y_cond
-                    x_tot_cond = []
-                    for k in range(len(y_cond)):
-                        y_c = torch.Tensor(y_cond[k])
-                        batch_y = batch_y * 0 + y_c
-                        x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
-                        x_tot_cond.append(x_tot_c)
-                    
+
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
                     x_tot_plot = x_tot.detach()#.cpu().numpy()
                     y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
                     y_tot_plot = y_tot.detach()#.cpu().numpy()
 
-                    for k in range(len(y_cond)):
-                        x_tot_c = x_tot_cond[k]
-                        x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
-                        x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()
-                        x_tot_cond[k] = x_tot_c_plot
+                    x_tot_cond = torch.zeros([0, *x_tot.shape])
 
-                init_x = batch_x.detach().cpu().numpy()
-                final_x = x_tot_plot[-1].detach().cpu().numpy()
-                std_final = np.std(final_x)
-                std_init = np.std(init_x)
-                mean_final = np.mean(final_x)
-                mean_init = np.mean(init_x)
+                    if y_cond is not None and not self.args.transfer and fb == 'b':
+                        for k in range(len(y_cond)):
+                            y_c = y_cond[k] + torch.zeros_like(batch_y)
+                            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, y_c, ipf_it=n, sample=True)
+
+                            x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
+                            x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()
+                            x_tot_cond = torch.cat([x_tot_cond, x_tot_c_plot.unsqueeze(0)], dim=0)
+
+                test_metrics = self.tester(
+                    batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
+                    x_tot_plot[:, :self.args.test_npar], y_tot_plot[:, :self.args.test_npar],
+                    x_tot_cond[:, :, :self.args.test_npar], self.args.y_cond,
+                    self.args.data, self.save_init_dl, i, n, fb
+                )
+                test_metrics['T'] = self.T
+                self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
                 
-                # print('Initial variance: ' + str(std_init ** 2))
-                # print('Final variance: ' + str(std_final ** 2))
-                
-                
-                self.save_logger.log_metrics({'FB': fb, 
-                                            'init_var': std_init**2, 'final_var': std_final**2, 
-                                            'mean_init':mean_init, 'mean_final': mean_final,
-                                            'T': self.T})
-                
-                self.plotter(batch_x, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond, i, n, fb)
+                self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
+                             self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
 
                 
     def set_seed(self, seed=0):
@@ -370,7 +371,7 @@ class IPFSequential(IPFBase):
         self.build_optimizers() 
         self.accelerate(forward_or_backward)
         
-        for i in tqdm(range(self.num_iter+1)):
+        for i in tqdm(range(1, self.num_iter+1)):
             self.set_seed(seed=n*self.num_iter+i)
 
             x, y, out, steps_expanded = next(new_dl)
@@ -393,15 +394,15 @@ class IPFSequential(IPFBase):
 
             if self.grad_clipping:
                 clipping_param = self.args.grad_clip
-                total_norm = torch.nn.utils.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
+                total_norm = self.accelerator.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
             else:
                 total_norm = 0.
 
 
-            if (i % self.stride_log == 0) and (i > 0) :
+            if i % self.stride_log == 0:
                 self.logger.log_metrics({'forward_or_backward':forward_or_backward,
                                          'loss': loss, 
-                                         'grad_norm' : total_norm}, step=i+self.num_iter*n)
+                                         'grad_norm' : total_norm}, step=i+self.num_iter*(n-1))
             
             self.optimizer[forward_or_backward].step()
             self.optimizer[forward_or_backward].zero_grad()
@@ -411,7 +412,7 @@ class IPFSequential(IPFBase):
 
             self.save_step(i, n, forward_or_backward)
             
-            if (i % self.args.cache_refresh_stride == 0) and (i > 0):
+            if (i % self.args.cache_refresh_stride == 0) and (i != self.num_iter):
                 new_dl = None
                 torch.cuda.empty_cache()
                 new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
@@ -423,7 +424,7 @@ class IPFSequential(IPFBase):
     def train(self):
         
         # INITIAL FORWARD PASS
-        if self.accelerator.is_local_main_process:
+        if self.accelerator.is_main_process:
             init_sample = next(self.save_init_dl)
             init_sample_x = init_sample[0]
             init_sample_y = init_sample[1]

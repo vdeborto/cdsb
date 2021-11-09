@@ -7,6 +7,7 @@ from ..data.stackedmnist import Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
 from .plotters import OneDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
+from .testers import OneDCondTester
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -24,6 +25,11 @@ def get_plotter(runner, args):
         return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
         return ImPlotter(plot_level = args.plot_level)
+
+def get_tester(runner, args):
+    dataset_tag = getattr(args, DATASET)
+    if dataset_tag == DATASET_1D_COND:
+        return OneDCondTester()
 
 # Model
 #--------------------------------------------------------------------------------

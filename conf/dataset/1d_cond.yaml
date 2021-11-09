@@ -50,6 +50,7 @@ fast_sampling: True
 
 # logging
 plot_npar: 1000
+test_npar: 10000
 log_stride: 50
 gif_stride: ${num_iter}
 

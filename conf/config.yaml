@@ -1,11 +1,13 @@
 # @package _global_
 
 defaults:
-  - launcher: local
+  - launcher: slurm_cpu
   - job
   - dataset: 1d_cond #celeba, 2d, stackedmnist
   - model: BasicCond #Basic, UNET
-  
+  - override hydra/launcher: submitit_slurm
+
+name: "1d_cond"
 
 # data
 data_dir: ./data/

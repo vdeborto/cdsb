@@ -1,4 +1,4 @@
-name: bridge_test
+name: bridge
 channels:
   - conda-forge
   - defaults

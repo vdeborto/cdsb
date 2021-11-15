@@ -38,3 +38,21 @@ def one_dim_cond_ds(npar, data_tag):
     init_sample_x, init_sample_y = data_distrib(npar, data_tag)
     init_ds = TensorDataset(init_sample_x, init_sample_y)
     return init_ds
+
+if __name__ == "__main__":
+    data = torch.cat(one_dim_cond_ds(10000, "type3").tensors, 1)
+    # import seaborn as sns
+    # sns.kdeplot(x=data[:, 1], y=data[:, 0])
+    # plt.xlim(-4, 4)
+    # plt.ylim(-1.5, 2.5)
+    # plt.show()
+    from scipy import stats
+    import matplotlib.pyplot as plt
+    density = lambda xy: stats.gaussian_kde(data.flip(1).T)(xy.T)
+    # density = lambda xy: 1/6 * stats.gamma.pdf(xy[:, 1] / np.tanh(xy[:, 0]), 1, scale=0.3) * np.where(np.abs(xy[:, 0]) < 3, 1, 0)
+    delta = 0.025
+    x = np.arange(-3.5, 3.5, delta)
+    y = np.arange(-0.6, 0.6, delta)
+    X, Y = np.meshgrid(x, y)
+    plt.contour(X, Y, density(np.stack([X, Y], 2).reshape((-1, 2))).reshape(X.shape), levels=8)
+    plt.show()

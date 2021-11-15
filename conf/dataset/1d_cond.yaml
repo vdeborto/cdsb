@@ -20,7 +20,7 @@ var_final: 1.*torch.tensor([1.])
 # device
 device: cpu
 dataparallel: False
-num_workers: 8
+num_workers: 0
 pin_memory: False
 distributed: False
 
@@ -31,7 +31,7 @@ ema: False
 ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
-npar: 10000
+npar: 50000
 batch_size: 512
 num_iter : 10000
 cache_npar: 10000

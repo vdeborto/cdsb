@@ -16,19 +16,14 @@ class ScoreNetworkCond(torch.nn.Module):
                        activation_fn=torch.nn.LeakyReLU())
 
         self.t_encoder = MLP(pos_dim,
-                             layer_widths=encoder_layers +[t_enc_dim],
+                             layer_widths=encoder_layers + [t_enc_dim],
                              activate_final = False,
                              activation_fn=torch.nn.LeakyReLU())
 
-        self.x_encoder = MLP(x_dim,
-                             layer_widths=encoder_layers +[t_enc_dim],
+        self.xy_encoder = MLP(x_dim + y_dim,
+                             layer_widths=encoder_layers + [2*t_enc_dim],
                              activate_final = False,
                              activation_fn=torch.nn.LeakyReLU())
-
-        self.y_encoder = MLP(y_dim,
-                             layer_widths=encoder_layers +[t_enc_dim],
-                             activate_final = False,
-                             activation_fn=torch.nn.LeakyReLU())        
 
     def forward(self, x, y, t):
         if len(x.shape) == 1:
@@ -36,10 +31,9 @@ class ScoreNetworkCond(torch.nn.Module):
         if len(y.shape) == 1:
             y = y.unsqueeze(0)
 
-        temb = get_timestep_embedding(t, self.temb_dim)
-        temb = self.t_encoder(temb)
-        xemb = self.x_encoder(x)
-        yemb = self.y_encoder(y)
-        h = torch.cat([xemb , yemb, temb], -1)
+        t_emb = get_timestep_embedding(t, self.temb_dim)
+        t_emb = self.t_encoder(t_emb)
+        xy_emb = self.xy_encoder(torch.cat([x, y], -1))
+        h = torch.cat([xy_emb, t_emb], -1)
         out = self.net(h) 
         return out

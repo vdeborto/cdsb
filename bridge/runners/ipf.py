@@ -301,10 +301,8 @@ class IPFBase(torch.nn.Module):
                     self.set_seed(seed=0 + self.accelerator.process_index)
                     if fb == 'f':
                         batch = next(self.save_init_dl)
-                        batch_x = batch[0]
-                        batch_y = batch[1]
-                        batch_x = batch_x.to(self.device)
-                        batch_y = batch_y.to(self.device)                                            
+                        batch_x = batch[0].to(self.device)
+                        batch_y = batch[1].to(self.device)                                         
                     elif self.args.transfer:
                         batch = next(self.save_final_dl)[0]
                         batch = batch.to(self.device)
@@ -422,25 +420,34 @@ class IPFSequential(IPFBase):
         
 
     def train(self):
-        
         # INITIAL FORWARD PASS
         if self.accelerator.is_main_process:
-            init_sample = next(self.save_init_dl)
-            init_sample_x = init_sample[0]
-            init_sample_y = init_sample[1]
-            init_sample_x = init_sample_x.to(self.device)
-            init_sample_y = init_sample_y.to(self.device)
-            x_tot, y_tot, _, _ = self.langevin.record_init_langevin(init_sample_x, init_sample_y)
-            shape_len = len(x_tot.shape)
-            x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
-            x_tot_plot = x_tot.detach()#.cpu().numpy()
-            y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
-            y_tot_plot = y_tot.detach()#.cpu().numpy()
-            
-            # self.plotter(init_sample, x_tot_plot, y_tot_plot, self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
-            # x_tot_plot = None
-            # x_tot = None
-            # torch.cuda.empty_cache()
+            with torch.no_grad():
+                self.set_seed(seed=0 + self.accelerator.process_index)
+                batch = next(self.save_init_dl)
+                batch_x = batch[0].to(self.device)
+                batch_y = batch[1].to(self.device) 
+                x_tot, y_tot, _, _ = self.langevin.record_init_langevin(batch_x, batch_y)
+                shape_len = len(x_tot.shape)
+                x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
+                x_tot_plot = x_tot.detach()#.cpu().numpy()
+                y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
+                y_tot_plot = y_tot.detach()#.cpu().numpy()
+                
+                test_metrics = self.tester(
+                        batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
+                        x_tot_plot[:, :self.args.test_npar], y_tot_plot[:, :self.args.test_npar],
+                        None, None, self.args.data, self.save_init_dl, 0, 0, 'f'
+                    )
+                test_metrics['T'] = self.T
+                self.save_logger.log_metrics(test_metrics, step=0)
+                
+                self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
+                                self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
+
+            x_tot_plot = None
+            x_tot = None
+            torch.cuda.empty_cache()
             
         for n in range(self.checkpoint_it, self.n_ipf+1):
             

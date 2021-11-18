@@ -1,4 +1,5 @@
 import torch
+import hydra
 from ..models import *
 from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
@@ -122,30 +123,33 @@ def get_datasets(args):
     
     # INITIAL (DATA) DATASET
 
+    data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
+
     # BIOCHEMICAL
 
     if dataset_tag == DATASET_BIOCHEMICAL:
         data_tag = args.data
-        npar = max(args.npar, args.cache_npar)
+        npar = args.npar
         init_ds = biochemical_ds(npar, data_tag)
         
     # 1D CONDITIONAL DATASET        
     
     if dataset_tag == DATASET_1D_COND:
         data_tag = args.data
-        npar = max(args.npar, args.cache_npar)
-        init_ds = one_dim_cond_ds(npar, data_tag)    
+        npar = args.npar
+        root = os.path.join(data_dir, '1d_cond')
+        init_ds = one_dim_cond_ds(root, npar, data_tag)    
 
     # 2D DATASET
     
     if dataset_tag == DATASET_2D:
         data_tag = args.data
-        npar = max(args.npar, args.cache_npar)
+        npar = args.npar
         init_ds = two_dim_ds(npar, data_tag)
 
     if dataset_transfer_tag == DATASET_2D:
         data_tag = args.data_transfer
-        npar = max(args.npar, args.cache_npar)
+        npar = args.npar
         final_ds = two_dim_ds(npar, data_tag)
         mean_final = torch.tensor(0.)
         var_final = torch.tensor(1.*10**3) #infty like
@@ -160,13 +164,13 @@ def get_datasets(args):
             train_transform.insert(2, transforms.RandomHorizontalFlip())
 
 
-        root = os.path.join(args.data_dir, 'celeba')
+        root = os.path.join(data_dir, 'celeba')
         init_ds = CelebA(root, split='train', transform=cmp(train_transform), download=False)
 
     # MNIST DATASET
 
     if dataset_tag ==  DATASET_STACKEDMNIST:
-        root = os.path.join(args.data_dir, 'mnist')
+        root = os.path.join(data_dir, 'mnist')
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file) 
         load = args.load
@@ -176,7 +180,7 @@ def get_datasets(args):
                                 device=args.device)
 
     if dataset_transfer_tag == DATASET_STACKEDMNIST:
-        root = os.path.join(args.data_dir, 'mnist')
+        root = os.path.join(data_dir, 'mnist')
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file)
         load = args.load
@@ -190,7 +194,7 @@ def get_datasets(args):
     # EMNIST DATASET
 
     if dataset_tag == DATASET_EMNIST:
-        root = os.path.join(args.data_dir, 'EMNIST')
+        root = os.path.join(data_dir, 'EMNIST')
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file)
         load = args.load
@@ -200,7 +204,7 @@ def get_datasets(args):
                                 device=args.device)
 
     if dataset_transfer_tag == DATASET_EMNIST:
-        root = os.path.join(args.data_dir, 'EMNIST')
+        root = os.path.join(data_dir, 'EMNIST')
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file)
         load = args.load

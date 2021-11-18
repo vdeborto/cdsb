@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from sklearn import datasets
 from torch.utils.data import TensorDataset
+import os
 
 # checker/pinwheel/8gaussians can be found at 
 # https://github.com/rtqichen/ffjord/blob/994864ad0517db3549717c25170f9b71e96788b1/lib/toy_data.py#L8
@@ -34,8 +35,17 @@ def data_distrib(npar, data):
 
     return init_sample_x, init_sample_y
 
-def one_dim_cond_ds(npar, data_tag):
-    init_sample_x, init_sample_y = data_distrib(npar, data_tag)
+def one_dim_cond_ds(root, npar, data_tag):
+    data_path = os.path.join(root, data_tag, "data.pt")
+    if os.path.isfile(data_path): 
+        init_sample_x, init_sample_y = torch.load(data_path)
+        assert init_sample_x.shape[0] == npar
+        print("Loaded dataset 1d_cond", data_tag)
+    else:
+        os.makedirs(os.path.join(root, data_tag), exist_ok=True)
+        init_sample_x, init_sample_y = data_distrib(npar, data_tag)
+        torch.save([init_sample_x, init_sample_y], data_path)
+        print("Created new dataset 1d_cond", data_tag)
     init_ds = TensorDataset(init_sample_x, init_sample_y)
     return init_ds
 

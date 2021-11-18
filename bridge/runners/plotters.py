@@ -80,22 +80,13 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
     # DENSITY
     # ROLES OF X AND Y inversed when compared to Conditional Sampling.
     
-    val_x = torch.zeros(0,1)
-    val_y = torch.zeros(0,1)
-    
-    if ipf_it == 1 and fb == "b":
+    if ipf_it == 0 and fb == "f":
         filename = 'original_density.png'
         filename = os.path.join(im_dir, filename)
-        N_APPROX = 10
-        for n in range(N_APPROX):
-            batch = next(init_dl)
-            batch_x = batch[0]
-            batch_y = batch[1]
-            val_x = torch.cat((val_x, batch_x), 0)
-            val_y = torch.cat((val_y, batch_y), 0)
-        val_x = val_x.cpu().numpy()
-        val_y = val_y.cpu().numpy()
-        k = kde.gaussian_kde([val_y[:,0],val_x[:,0]])
+        batch = next(init_dl)
+        batch_x = batch[0].cpu().numpy()
+        batch_y = batch[1].cpu().numpy()
+        k = kde.gaussian_kde([batch_y[:,0],batch_x[:,0]])
         xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
         zi = k(np.vstack([xi.flatten(), yi.flatten()]))
         plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
@@ -125,7 +116,7 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
     plot_paths_reg = []
     abc = torch.zeros(0, 1)
 
-    if fb == 'b':
+    if fb == 'b' and y_cond is not None:
         x_lin = np.linspace(xlim[0], xlim[1], npts)
         zs_lin = np.zeros([0, npts])
 

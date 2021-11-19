@@ -42,19 +42,19 @@ UNET_MODEL = 'UNET'
 
 
 def get_models(args):
-    if "x_dim" in args:
-        x_dim = args.x_dim
-    else:
-        x_dim = 1
-    if "y_dim" in args:
-        y_dim = args.y_dim
-    else:
-        y_dim = 1
+    x_dim = args.x_dim
+    y_dim = args.y_dim
         
     model_tag = getattr(args, MODEL)
 
     if model_tag == BASIC_MODEL_COND:
-        net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim), ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim)
+        kwargs = {
+                    "encoder_layers": args.model.encoder_layers,
+                    "temb_dim": args.model.temb_dim,
+                    "decoder_layers": args.model.decoder_layers,
+                    "temb_denom": args.model.temb_denom
+                }
+        net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs), ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
     
     if model_tag == BASIC_MODEL:
         net_f, net_b = ScoreNetwork(), ScoreNetwork()
@@ -93,7 +93,7 @@ def get_models(args):
                 }
 
         net_f, net_b = UNetModel(**kwargs), UNetModel(**kwargs)   
-       
+    print(net_b)   
     return net_f, net_b
 
 # Optimizer

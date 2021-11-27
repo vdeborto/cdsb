@@ -6,6 +6,7 @@ sys.path.append('..')
 
 
 from bridge.runners.ipf import IPFSequential
+from bridge.runners.config_getters import get_datasets
 
 
 # SETTING PARAMETERS
@@ -14,7 +15,10 @@ from bridge.runners.ipf import IPFSequential
 def main(args):
 
     print('Directory: ' + os.getcwd())
-    ipf = IPFSequential(args)
+
+    init_ds, final_ds, mean_final, var_final = get_datasets(args)
+
+    ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args)
     ipf.train()
     
 

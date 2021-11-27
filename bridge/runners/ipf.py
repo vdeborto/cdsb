@@ -19,8 +19,12 @@ import time
 
 class IPFBase(torch.nn.Module):
 
-    def __init__(self, args):
+    def __init__(self, init_ds, final_ds, mean_final, var_final, args):
         super().__init__()
+        self.init_ds = init_ds
+        self.final_ds = final_ds
+        self.mean_final = mean_final
+        self.var_final = var_final
         self.args = args
         
         #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -42,9 +46,9 @@ class IPFBase(torch.nn.Module):
             gamma_half = np.linspace(self.args.gamma_min,args.gamma_max, n)
         elif self.args.gamma_space == 'geomspace':
             gamma_half = np.geomspace(self.args.gamma_min, self.args.gamma_max, n)
-        gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
-        gammas = torch.tensor(gammas).to(self.device)
-        self.T = torch.sum(gammas)
+        self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
+        self.gammas = torch.tensor(self.gammas).to(self.device)
+        self.T = torch.sum(self.gammas)
 
         # get models
         self.build_models()
@@ -56,30 +60,17 @@ class IPFBase(torch.nn.Module):
         # get loggers
         self.logger = self.get_logger('train_logs')
         self.save_logger = self.get_logger('test_logs')
-      
-        # get data
-        self.build_dataloaders()
-        
 
         # langevin
         if self.args.weight_distrib:
             alpha = self.args.weight_distrib_alpha
-            prob_vec = (1 + alpha) * torch.sum(gammas) - torch.cumsum(gammas, 0)            
+            prob_vec = (1 + alpha) * torch.sum(self.gammas) - torch.cumsum(self.gammas, 0)
         else:
-            prob_vec = gammas * 0 + 1
-        time_sampler = torch.distributions.categorical.Categorical(prob_vec)
-            
-        batch = next(self.save_init_dl)
-        batch_x = batch[0]
-        batch_y = batch[1]
-        shape_x = batch_x[0].shape
-        shape_y = batch_y[0].shape
-        self.shape_x = shape_x
-        self.shape_y = shape_y
-        self.langevin = Langevin(self.num_steps, shape_x, shape_y, gammas, 
-                                 time_sampler, device = self.device, 
-                                 mean_final=self.mean_final, var_final=self.var_final, 
-                                 mean_match=self.args.mean_match)
+            prob_vec = self.gammas * 0 + 1
+        self.time_sampler = torch.distributions.categorical.Categorical(prob_vec)
+
+        # get data
+        self.build_dataloaders()
 
         # checkpoint
         date = str(datetime.datetime.now())[0:10]
@@ -194,11 +185,9 @@ class IPFBase(torch.nn.Module):
         self.optimizer = {'f': optimizer_f, 'b':optimizer_b}
 
     def build_dataloaders(self):
-        init_ds, final_ds, mean_final, var_final = get_datasets(self.args)
-
-        self.mean_final = mean_final.to(self.device)
-        self.var_final = var_final.to(self.device)
-        self.std_final = torch.sqrt(var_final).to(self.device)
+        self.mean_final = self.mean_final.to(self.device)
+        self.var_final = self.var_final.to(self.device)
+        self.std_final = torch.sqrt(self.var_final).to(self.device)
         
         def worker_init_fn(worker_id):                                                          
             np.random.seed(np.random.get_state()[1][0] + worker_id + self.accelerator.process_index)
@@ -208,26 +197,39 @@ class IPFBase(torch.nn.Module):
                        "worker_init_fn": worker_init_fn,
                        'drop_last': True}
 
-        self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(init_ds))
-        self.cache_npar = min(self.args.cache_npar, len(init_ds))
+        self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(self.init_ds))
+        self.cache_npar = min(self.args.cache_npar, len(self.init_ds))
         
         # get plotter, gifs etc.
-        self.save_init_dl = DataLoader(init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
-        self.cache_init_dl = DataLoader(init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
+        self.save_init_dl = DataLoader(self.init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+        self.cache_init_dl = DataLoader(self.init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
         (self.cache_init_dl, self.save_init_dl) = self.accelerator.prepare(self.cache_init_dl, self.save_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
         self.save_init_dl = repeater(self.save_init_dl)
 
 
         if self.args.transfer:
-            self.save_final_dl = DataLoader(final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
-            self.cache_final_dl = DataLoader(final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
+            self.save_final_dl = DataLoader(self.final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+            self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
             (self.cache_final_dl, self.save_final_dl) = self.accelerator.prepare(self.cache_final_dl, self.save_final_dl)
             self.cache_final_dl = repeater(self.cache_final_dl)
             self.save_final_dl = repeater(self.save_final_dl)
         else:
             self.cache_final_dl = None
             self.save_final = None
+
+        batch = next(self.save_init_dl)
+        batch_x = batch[0]
+        batch_y = batch[1]
+        shape_x = batch_x[0].shape
+        shape_y = batch_y[0].shape
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+
+        self.langevin = Langevin(self.num_steps, shape_x, shape_y, self.gammas,
+                                 self.time_sampler, device = self.device,
+                                 mean_final=self.mean_final, var_final=self.var_final,
+                                 mean_match=self.args.mean_match)
         
     def new_cacheloader(self, forward_or_backward, n, use_ema=True):
         
@@ -358,10 +360,6 @@ class IPFBase(torch.nn.Module):
         torch.cuda.empty_cache()
 
 class IPFSequential(IPFBase):
-    
-    def __init__(self, args):
-        super().__init__(args)
-
     def ipf_step(self, forward_or_backward, n):
         new_dl = None
         new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)

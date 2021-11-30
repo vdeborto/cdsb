@@ -1,13 +1,16 @@
 # @package _global_
 
-Dataset: 1d_cond
+Dataset: 5d_cond
 
 x_dim: 1
-y_dim: 1
+y_dim: 5
 
 # conditioning
 data: type1
-y_cond: [-1.2, 0, 1.2]
+y_cond: 
+  - torch.randn(5)
+  - torch.randn(5)
+  - torch.randn(5)
 
 # transfer
 transfer: False
@@ -17,7 +20,7 @@ data_transfer: circle
 adaptive_mean: False
 final_adaptive: False
 mean_final: torch.tensor([0.])
-var_final: 1.*torch.tensor([1.])
+var_final: 10.*torch.tensor([1.])
 
 
 # device
@@ -34,17 +37,17 @@ ema: False
 ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
-npar: 50000
-batch_size: 2000
-num_iter: 20000
-cache_npar: 20000
-n_ipf: 10
+npar: 10000
+batch_size: 512
+num_iter: 10000
+cache_npar: 10000
+n_ipf: 20
 lr: 0.0001
 
 # schedule
-num_steps: 50
-gamma_max: 0.005
-gamma_min: 0.005
+num_steps: 20
+gamma_max: 0.1
+gamma_min: 0.1
 gamma_space: linspace
 weight_distrib: False
 weight_distrib_alpha: 100
@@ -53,7 +56,7 @@ fast_sampling: True
 
 # logging
 plot_npar: 2000
-test_npar: 50000
+test_npar: 10000
 log_stride: 50
 gif_stride: ${num_iter}
 

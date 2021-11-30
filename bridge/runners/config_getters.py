@@ -3,12 +3,13 @@ import hydra
 from ..models import *
 from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
+from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
-from .plotters import OneDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
-from .testers import OneDCondTester
+from .plotters import OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
+from .testers import OneDCondTester, FiveDCondTester
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -20,6 +21,8 @@ def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
         return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+    elif dataset_tag == DATASET_5D_COND:
+        return FiveDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_BIOCHEMICAL:
         return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_2D:
@@ -31,6 +34,9 @@ def get_tester(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
         return OneDCondTester()
+    
+    elif dataset_tag == DATASET_5D_COND:
+        return FiveDCondTester(runner)
 
 # Model
 #--------------------------------------------------------------------------------
@@ -107,6 +113,7 @@ def get_optimizers(net_f, net_b, lr):
 DATASET = 'Dataset'
 DATASET_TRANSFER = 'Dataset_transfer'
 DATASET_1D_COND = '1d_cond'
+DATASET_5D_COND = '5d_cond'
 DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_2D = '2d'
 DATASET_CELEBA = 'celeba'
@@ -135,10 +142,22 @@ def get_datasets(args):
     # 1D CONDITIONAL DATASET        
     
     if dataset_tag == DATASET_1D_COND:
+        assert args.x_dim == 1
+        assert args.y_dim == 1
         data_tag = args.data
         npar = args.npar
         root = os.path.join(data_dir, '1d_cond')
         init_ds = one_dim_cond_ds(root, npar, data_tag)    
+    
+    # 5D CONDITIONAL DATASET
+    
+    if dataset_tag == DATASET_5D_COND:
+        assert args.x_dim == 1
+        assert args.y_dim == 5
+        data_tag = args.data
+        npar = args.npar
+        root = os.path.join(data_dir, '5d_cond')
+        init_ds = five_dim_cond_ds(root, npar, data_tag)
 
     # 2D DATASET
     

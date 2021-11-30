@@ -106,7 +106,7 @@ class FiveDCondTester(Tester):
 
             for k in tqdm(range(len(y_test))):
                 y_c = y_test[k].expand_as(y_init).to(self.runner.device)
-                x_tot_c, _, _, _ = self.runner.langevin.record_langevin_seq(sample_net, x_init, y_c, ipf_it=n, sample=True)
+                x_tot_c, _, _, _ = self.runner.langevin.record_langevin_seq(sample_net, x_init, y_c, sample=True)
 
                 x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
                 x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()

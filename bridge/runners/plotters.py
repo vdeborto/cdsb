@@ -347,7 +347,7 @@ class OneDCondPlotter(Plotter):
         self.num_steps = num_steps
         self.gammas = gammas
 
-    def plot(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
         fb = forward_or_backward
         ipf_it = n
         x_tot_plot = x_tot_plot.cpu().numpy()
@@ -360,10 +360,6 @@ class OneDCondPlotter(Plotter):
                            ipf_it=ipf_it,
                            freq=self.num_steps//min(self.num_steps,50),
                            im_dir=self.im_dir, gif_dir=self.gif_dir)
-
-
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
 
 
 class FiveDCondPlotter(Plotter):
@@ -381,7 +377,7 @@ class FiveDCondPlotter(Plotter):
         self.num_steps = num_steps
         self.gammas = gammas
 
-    def plot(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
         fb = forward_or_backward
         ipf_it = n
         x_tot_plot = x_tot_plot.cpu().numpy()
@@ -394,10 +390,6 @@ class FiveDCondPlotter(Plotter):
                            ipf_it=ipf_it,
                            freq=self.num_steps//min(self.num_steps,50),
                            im_dir=self.im_dir, gif_dir=self.gif_dir)
-
-
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
 
 
 class BiochemicalPlotter(Plotter):

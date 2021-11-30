@@ -318,7 +318,7 @@ class IPFBase(torch.nn.Module):
                         batch_y = next(self.save_init_dl)[1]
                         batch_y = batch_y.to(self.device)                                            
                         
-                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
+                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
 
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
@@ -331,7 +331,7 @@ class IPFBase(torch.nn.Module):
                     if self.y_cond is not None and not self.args.transfer and fb == 'b':
                         for k in range(len(self.y_cond)):
                             y_c = self.y_cond[k] + torch.zeros_like(batch_y)
-                            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, y_c, ipf_it=n, sample=True)
+                            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, y_c, sample=True)
 
                             x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
                             x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()
@@ -349,6 +349,43 @@ class IPFBase(torch.nn.Module):
                 self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
                              self.args.data, self.save_init_dl, self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
 
+    def backward_sample(self, y_c, num_samples=None, final_batch_x=None):
+        if self.accelerator.is_main_process:
+            if self.args.ema:
+                sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
+            else:
+                sample_net = self.net['b']
+
+            with torch.no_grad():
+                # self.set_seed(seed=0 + self.accelerator.process_index)
+                if final_batch_x is not None:
+                    final_batch_x = final_batch_x.to(self.device)
+                else:
+                    final_batch_x = self.mean_final + self.std_final * torch.randn((num_samples, *self.shape_x),
+                                                                                   device=self.device)
+                final_batch_y = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
+                x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, final_batch_y, sample=True)
+
+                x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
+
+        return x_tot_c
+
+    def forward_backward_sample(self, y_c, init_batch_x, init_batch_y):
+        if self.accelerator.is_main_process:
+            if self.args.ema:
+                sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
+            else:
+                sample_net = self.net['f']
+
+            with torch.no_grad():
+                # self.set_seed(seed=0 + self.accelerator.process_index)
+                init_batch_x = init_batch_x.to(self.device)
+                init_batch_y = init_batch_y.to(self.device)
+                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+
+            final_batch_x = x_tot[:, -1]
+
+        return self.backward_sample(y_c, final_batch_x=final_batch_x)
                 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)

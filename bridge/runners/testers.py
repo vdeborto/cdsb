@@ -1,13 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
 import torch
 import torch.nn.functional as functional
 import os
 from scipy.stats import kde, gamma, norm
 from tqdm import tqdm
-
-matplotlib.use('Agg')
 
 
 class Tester:

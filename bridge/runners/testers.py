@@ -67,9 +67,12 @@ class FiveDCondTester(Tester):
         super().__init__()
 
     def test_joint(self, x_tot, y_tot, data, init_dl, i, n, fb, tag=''):
-        return {}
+        out = {}
+        return out
 
     def test_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag=''):
+        out = {}
+
         if fb == 'b':
             if data == 'type1':
                 true_x_test_mean = (y_cond[:, 0]**2 + torch.exp(y_cond[:, 1] + y_cond[:, 2]/3) + torch.sin(y_cond[:, 3] + y_cond[:, 4])).unsqueeze(1)

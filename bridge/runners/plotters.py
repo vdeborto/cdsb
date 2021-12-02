@@ -130,10 +130,12 @@ class OneDCondPlotter(Plotter):
         self.gammas = gammas
 
     def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
-        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
+        self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb)
+        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
     
-    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=1):
+    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
 
         ylim = [-3, 3]
@@ -191,7 +193,9 @@ class OneDCondPlotter(Plotter):
 
         make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)    
 
-    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=1):
+    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
         
         ylim = [-3, 3]
@@ -269,12 +273,14 @@ class FiveDCondPlotter(Plotter):
         self.gammas = gammas
 
     def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
+        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
     
-    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=1):
+    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
         pass
 
-    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=1):
+    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
         
         npts = 250

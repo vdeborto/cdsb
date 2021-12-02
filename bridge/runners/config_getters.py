@@ -36,7 +36,7 @@ def get_tester(runner, args):
         return OneDCondTester()
     
     elif dataset_tag == DATASET_5D_COND:
-        return FiveDCondTester(runner)
+        return FiveDCondTester()
 
 # Model
 #--------------------------------------------------------------------------------

@@ -130,9 +130,6 @@ class OneDCondPlotter(Plotter):
         self.gammas = gammas
 
     def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        x_tot_plot = x_tot_plot.cpu().numpy()
-        y_tot_plot = y_tot_plot.cpu().numpy()
-
         self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
         self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
     
@@ -160,6 +157,9 @@ class OneDCondPlotter(Plotter):
         # DENSITY
         # ROLES OF X AND Y inversed when compared to Conditional Sampling.
         
+        x = x.cpu().numpy()
+        y = y.cpu().numpy()
+
         if n == 0 and fb == "f":
             filename = 'original_density.png'
             filename = os.path.join(self.im_dir, filename)
@@ -214,6 +214,8 @@ class OneDCondPlotter(Plotter):
             x_lin = np.linspace(xlim[0], xlim[1], npts)
             zs_lin = np.zeros([0, npts])
 
+            y_cond = y_cond.cpu().numpy()
+
             for j in range(len(y_cond)):
                 y_c = y_cond[j]
 
@@ -236,11 +238,10 @@ class OneDCondPlotter(Plotter):
                     for j in range(len(y_cond)):
                         y_c = y_cond[j]
 
-                        x_cond = x_tot_cond[j][k, :, 0]
-                        x_cond_np = x_cond.cpu().numpy()
+                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
 
                         plt.plot(x_lin, zs_lin[j], color=colors[j])
-                        plt.hist(x_cond_np, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
+                        plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
 
                     filename = name + 'histogram_' + str(k) + '.png'
                     filename = os.path.join(self.im_dir, filename)
@@ -268,9 +269,6 @@ class FiveDCondPlotter(Plotter):
         self.gammas = gammas
 
     def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        x_tot_plot = x_tot_plot.cpu().numpy()
-        y_tot_plot = y_tot_plot.cpu().numpy()
-
         self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb, freq=self.num_steps//min(self.num_steps,50))
     
     def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=1):
@@ -296,6 +294,8 @@ class FiveDCondPlotter(Plotter):
         if fb == 'b' and y_cond is not None:
             x_lin = np.linspace(xlim[0], xlim[1], npts)
             zs_lin = np.zeros([0, npts])
+
+            y_cond = y_cond.cpu().numpy()
 
             for j in range(len(y_cond)):
                 y_c = y_cond[j]
@@ -323,8 +323,7 @@ class FiveDCondPlotter(Plotter):
                     for j in range(len(y_cond)):
                         y_c = y_cond[j]
 
-                        x_cond = x_tot_cond[j][k, :, 0]
-                        x_cond_np = x_cond.cpu().numpy()
+                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
 
                         x_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
 
@@ -346,8 +345,7 @@ class FiveDCondPlotter(Plotter):
                     for j in range(len(y_cond)):
                         y_c = y_cond[j]
 
-                        x_cond = x_tot_cond[j][k, :, 0]
-                        x_cond_np = x_cond.cpu().numpy()
+                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
 
                         z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
                         zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])

@@ -102,10 +102,14 @@ class IPFBase(torch.nn.Module):
         self.stride = self.args.gif_stride
         self.stride_log = self.args.log_stride
 
-        self.y_cond = list(self.args.y_cond)
-        for n in range(len(self.y_cond)):
-            if isinstance(self.y_cond[n], str):
-                self.y_cond[n] = eval(self.y_cond[n]).to(self.device)
+        if isinstance(self.args.y_cond, str):
+            self.y_cond = eval(self.args.y_cond).to(self.device)
+        else:
+            self.y_cond = list(self.args.y_cond)
+            for j in range(len(self.y_cond)):
+                if isinstance(self.y_cond[j], str):
+                    self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
+            self.y_cond = torch.stack(self.y_cond, dim=0)
         
 
     def get_logger(self, name='logs'):

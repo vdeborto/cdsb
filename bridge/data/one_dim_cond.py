@@ -4,8 +4,6 @@ from sklearn import datasets
 from torch.utils.data import TensorDataset
 import os
 
-# checker/pinwheel/8gaussians can be found at 
-# https://github.com/rtqichen/ffjord/blob/994864ad0517db3549717c25170f9b71e96788b1/lib/toy_data.py#L8
 
 def data_distrib(npar, data):
 
@@ -27,13 +25,7 @@ def data_distrib(npar, data):
         gamma = gamma_dis.sample_n(npar).reshape(npar, 1)
         x = gamma * tanh(y)
 
-    init_sample_x = x
-    init_sample_y = y
-        
-    init_sample_x = init_sample_x.float()
-    init_sample_y = init_sample_y.float()
-
-    return init_sample_x, init_sample_y
+    return x, y
 
 def one_dim_cond_ds(root, npar, data_tag):
     data_path = os.path.join(root, data_tag, "data.pt")

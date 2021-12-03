@@ -12,8 +12,7 @@ run:
 
 sweep:
   # Output directory for sweep runs
-  dir: ./${paths.experiments_dir_name}/${name}/${now:%Y-%m-%d}/cfg-${hydra.job.override_dirname}/${now:%H-%M-%S}
-  subdir: ./
+  dir: ./${paths.experiments_dir_name}/${name}/${now:%Y-%m-%d}/cfg:${hydra.job.override_dirname}/${now:%H-%M-%S}
 
 job_logging:
   formatters:

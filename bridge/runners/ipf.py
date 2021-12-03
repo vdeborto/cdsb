@@ -101,6 +101,11 @@ class IPFBase(torch.nn.Module):
 
         self.stride = self.args.gif_stride
         self.stride_log = self.args.log_stride
+
+        self.y_cond = list(self.args.y_cond)
+        for n in range(len(self.y_cond)):
+            if isinstance(self.y_cond[n], str):
+                self.y_cond[n] = eval(self.y_cond[n]).to(self.device)
         
 
     def get_logger(self, name='logs'):
@@ -314,7 +319,6 @@ class IPFBase(torch.nn.Module):
                         batch_y = batch_y.to(self.device)                                            
                         
                     x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
-                    y_cond = self.args.y_cond
 
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
@@ -324,9 +328,9 @@ class IPFBase(torch.nn.Module):
 
                     x_tot_cond = torch.zeros([0, *x_tot.shape])
 
-                    if y_cond is not None and not self.args.transfer and fb == 'b':
-                        for k in range(len(y_cond)):
-                            y_c = y_cond[k] + torch.zeros_like(batch_y)
+                    if self.y_cond is not None and not self.args.transfer and fb == 'b':
+                        for k in range(len(self.y_cond)):
+                            y_c = self.y_cond[k] + torch.zeros_like(batch_y)
                             x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, y_c, ipf_it=n, sample=True)
 
                             x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
@@ -336,14 +340,14 @@ class IPFBase(torch.nn.Module):
                 test_metrics = self.tester(
                     batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
                     x_tot_plot[:, :self.args.test_npar], y_tot_plot[:, :self.args.test_npar],
-                    x_tot_cond[:, :, :self.args.test_npar], self.args.y_cond,
+                    x_tot_cond[:, :, :self.args.test_npar], self.y_cond,
                     self.args.data, self.save_init_dl, i, n, fb
                 )
                 test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
                 
                 self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
-                             self.args.data, self.save_init_dl, self.args.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
+                             self.args.data, self.save_init_dl, self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
 
                 
     def set_seed(self, seed=0):

@@ -7,7 +7,7 @@ from PIL import Image
 from ..data.two_dim import data_distrib
 import os, sys
 matplotlib.use('Agg')
-from scipy.stats import kde, gamma, norm
+from scipy.stats import kde, gamma, norm, lognorm
 
 
 
@@ -22,7 +22,8 @@ def make_gif(plot_paths, output_directory='./gif', gif_name='gif'):
                    save_all=True,
                    duration=100,
                    loop=0)
-    
+
+
 def save_sequence_cond_biochemical(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
 
     xlim = [-0.5, 1.5]
@@ -72,7 +73,7 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
         #     return 1/6 * torch.distributions.TransformedDistribution(
         #         base_distribution, transforms).log_prob(x_pyt).exp().numpy()
         colors = ['red', 'green', 'blue']
-    else:
+    elif data == 'type3':
         xlim = [-0.8,0.8]
         # true_pdf = lambda xy: 1/6 * gamma.pdf(xy[:, 0] / np.tanh(xy[:, 1]), 1, scale=0.3)
         colors = ['red', 'blue']
@@ -114,7 +115,6 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
     # HISTOGRAMS
     name_gif = name + 'histogram'
     plot_paths_reg = []
-    abc = torch.zeros(0, 1)
 
     if fb == 'b' and y_cond is not None:
         x_lin = np.linspace(xlim[0], xlim[1], npts)
@@ -157,7 +157,89 @@ def save_sequence_cond_1d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
     
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)  
     
+
+def save_sequence_cond_5d(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
+    npts = 250
+    if data == 'type1':
+        xlim = [-4.5,6.5]
+    elif data == 'type2':
+        xlim = [-4,9]
+    elif data == 'type3':
+        xlim = [-5,125]
+    elif data == 'type4':
+        xlim = [-3.5,3.5]
+
+    # # HISTOGRAMS
+    name_gif = name + 'histogram'
+    plot_paths_reg = []
+
+    if fb == 'b' and y_cond is not None:
+        x_lin = np.linspace(xlim[0], xlim[1], npts)
+        zs_lin = np.zeros([0, npts])
+
+        for n in range(len(y_cond)):
+            y_c = y_cond[n]
+
+            if data == 'type1':
+                z = norm.pdf(x_lin, loc=y_c[0]**2 + torch.exp(y_c[1] + y_c[2]/3) + torch.sin(y_c[3] + y_c[4]))
+            
+            elif data == 'type2':
+                x_mean = y_c[0]**2 + torch.exp(y_c[1] + y_c[2]/3) + y_c[3] - y_c[4]
+                x_std = 0.5 + y_c[1]**2/2 + y_c[4]**2/2
+                z = norm.pdf(x_lin, loc=x_mean, scale=x_std)
+
+            elif data == 'type3':
+                mult = 5 + y_c[0]**2/3 + y_c[1]**2 + y_c[2]**2 + y_c[3] + y_c[4]
+                z = 0.5 * lognorm.pdf(x_lin, s=0.5, scale=np.exp(1)*mult) + 0.5 * lognorm.pdf(x_lin, s=0.5, scale=np.exp(-1)*mult)
+
+            elif data == 'type4':
+                z = 0.5 * norm.pdf(x_lin, loc=-y_c[0], scale=0.25) + 0.5 * norm.pdf(x_lin, loc=y_c[0], scale=0.25)
+
+            zs_lin = np.vstack([zs_lin, z])
+
+        for k in range(num_steps):
+            if k % freq == 0:
+                plt.clf()
+                for n in range(len(y_cond)):
+                    y_c = y_cond[n]
+
+                    x_cond = x_tot_cond[n][k, :, 0]
+                    x_cond_np = x_cond.cpu().numpy()
+
+                    x_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
+
+                    plt.plot(x_lin, zs_lin[n], color="C"+str(n))
+                    plt.plot(x_lin, x_cond_kde, color="C"+str(n), ls="--")
+
+                filename = name + 'histogram_' + str(k) + '.png'
+                filename = os.path.join(im_dir, filename)
+
+                if ipf_it is not None:
+                    str_title = 'IPFP iteration: ' + str(ipf_it)
+                    plt.title(str_title)
+                plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
+                plot_paths_reg.append(filename)
+            
+            if k == num_steps - 1:
+                raw_data_save = {'x': x_lin, 'y': y_cond, 'px_y_true': zs_lin}
+                zs_cond_kde = np.zeros([0, npts])
+                for n in range(len(y_cond)):
+                    y_c = y_cond[n]
+
+                    x_cond = x_tot_cond[n][k, :, 0]
+                    x_cond_np = x_cond.cpu().numpy()
+
+                    z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
+                    zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])
+                raw_data_save['px_y_kde'] = zs_cond_kde
+                os.makedirs(os.path.join(im_dir, 'raw_data'), exist_ok=True)
+                torch.save(raw_data_save, os.path.join(im_dir, 'raw_data', name + 'histogram_' + str(k) + '.pt'))
+
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)  
+    
+
 class Plotter(object):
 
     def __init__(self):
@@ -168,7 +250,6 @@ class Plotter(object):
 
     def __call__(self, initial_sample, x_tot_plot, net, i, n, forward_or_backward):
         self.plot(initial_sample, x_tot_plot, net, i, n, forward_or_backward)
-
 
 
 class ImPlotter(object):
@@ -274,6 +355,40 @@ class OneDCondPlotter(Plotter):
         name = str(i) + '_' + fb +'_' + str(n) + '_'
 
         save_sequence_cond_1d(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
+                           data=data, init_dl=init_dl, y_cond=y_cond,
+                           x_tot_cond=x_tot_cond, fb=fb, name=name,
+                           ipf_it=ipf_it,
+                           freq=self.num_steps//min(self.num_steps,50),
+                           im_dir=self.im_dir, gif_dir=self.gif_dir)
+
+
+    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+        self.plot(initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
+
+
+class FiveDCondPlotter(Plotter):
+
+    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
+
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
+        if not os.path.isdir(gif_dir):
+            os.mkdir(gif_dir)
+
+        self.im_dir = im_dir
+        self.gif_dir = gif_dir
+
+        self.num_steps = num_steps
+        self.gammas = gammas
+
+    def plot(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+        fb = forward_or_backward
+        ipf_it = n
+        x_tot_plot = x_tot_plot.cpu().numpy()
+        y_tot_plot = y_tot_plot.cpu().numpy()
+        name = str(i) + '_' + fb +'_' + str(n) + '_'
+
+        save_sequence_cond_5d(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
                            data=data, init_dl=init_dl, y_cond=y_cond,
                            x_tot_cond=x_tot_cond, fb=fb, name=name,
                            ipf_it=ipf_it,

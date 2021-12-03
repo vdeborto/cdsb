@@ -45,7 +45,7 @@ class CacheLoader(Dataset):
                 if (n == 1) & (fb=='b'):
                     x, y, out, steps_expanded = langevin.record_init_langevin(batch_x, batch_y)
                 else:
-                    x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n)
+                    x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y)
                 
                 # store x, out
                 x = x.unsqueeze(2)

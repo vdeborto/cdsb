@@ -7,7 +7,10 @@ y_dim: 1
 
 # conditioning
 data: type1
-y_cond: [-1.2, 0, 1.2]
+y_cond: 
+  - torch.tensor([-1.2])
+  - torch.tensor([0])
+  - torch.tensor([1.2])
 
 # transfer
 transfer: False

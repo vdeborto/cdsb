@@ -75,7 +75,7 @@ class Langevin(torch.nn.Module):
             
         return x_tot, y_tot, out, steps_expanded
 
-    def record_langevin_seq(self, net, init_samples_x, init_samples_y, t_batch=None, ipf_it=0, sample=False):
+    def record_langevin_seq(self, net, init_samples_x, init_samples_y, t_batch=None, sample=False):
         mean_final = self.mean_final
         var_final = self.var_final        
     
@@ -129,8 +129,8 @@ class Langevin(torch.nn.Module):
         return x_tot, y_tot, out, steps_expanded
 
 
-    def forward(self, net, init_samples_x, init_samples_y, t_batch, ipf_it):
-        return self.record_langevin_seq(net, init_samples_x, init_samples_y, t_batch, ipf_it)
+    def forward(self, net, init_samples_x, init_samples_y, t_batch):
+        return self.record_langevin_seq(net, init_samples_x, init_samples_y, t_batch)
     
 
 

@@ -102,10 +102,14 @@ class IPFBase(torch.nn.Module):
         self.stride = self.args.gif_stride
         self.stride_log = self.args.log_stride
 
-        self.y_cond = list(self.args.y_cond)
-        for n in range(len(self.y_cond)):
-            if isinstance(self.y_cond[n], str):
-                self.y_cond[n] = eval(self.y_cond[n]).to(self.device)
+        if isinstance(self.args.y_cond, str):
+            self.y_cond = eval(self.args.y_cond).to(self.device)
+        else:
+            self.y_cond = list(self.args.y_cond)
+            for j in range(len(self.y_cond)):
+                if isinstance(self.y_cond[j], str):
+                    self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
+            self.y_cond = torch.stack(self.y_cond, dim=0)
         
 
     def get_logger(self, name='logs'):
@@ -315,10 +319,12 @@ class IPFBase(torch.nn.Module):
                         batch = batch.to(self.device)
                     else:
                         batch_x = self.mean_final + self.std_final*torch.randn((self.save_npar, *self.shape_x), device=self.device)
-                        batch_y = next(self.save_init_dl)[1]
-                        batch_y = batch_y.to(self.device)                                            
+                        init_batch = next(self.save_init_dl)
+                        batch_y = init_batch[1].to(self.device)
+                        init_batch_x = init_batch[0].to(self.device)
+                        init_batch_y = batch_y                                       
                         
-                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, ipf_it=n, sample=True)
+                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
 
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
@@ -327,15 +333,15 @@ class IPFBase(torch.nn.Module):
                     y_tot_plot = y_tot.detach()#.cpu().numpy()
 
                     x_tot_cond = torch.zeros([0, *x_tot.shape])
+                    x_tot_cond_fwdbwd = torch.zeros([0, *x_tot.shape])
 
                     if self.y_cond is not None and not self.args.transfer and fb == 'b':
                         for k in range(len(self.y_cond)):
-                            y_c = self.y_cond[k] + torch.zeros_like(batch_y)
-                            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, y_c, ipf_it=n, sample=True)
+                            x_tot_c = self.backward_sample(self.y_cond[k], final_batch_x=batch_x)
+                            x_tot_cond = torch.cat([x_tot_cond, x_tot_c.cpu().unsqueeze(0)], dim=0)
 
-                            x_tot_c = x_tot_c.permute(1, 0, *list(range(2, shape_len)))
-                            x_tot_c_plot = x_tot_c.detach()#.cpu().numpy()
-                            x_tot_cond = torch.cat([x_tot_cond, x_tot_c_plot.unsqueeze(0)], dim=0)
+                            x_tot_c_fwdbwd = self.forward_backward_sample(self.y_cond[k], init_batch_x, init_batch_y, n)
+                            x_tot_cond_fwdbwd = torch.cat([x_tot_cond_fwdbwd, x_tot_c_fwdbwd.cpu().unsqueeze(0)], dim=0)
 
                 test_metrics = self.tester(
                     batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
@@ -343,12 +349,56 @@ class IPFBase(torch.nn.Module):
                     x_tot_cond[:, :, :self.args.test_npar], self.y_cond,
                     self.args.data, self.save_init_dl, i, n, fb
                 )
+                test_metrics.update(self.tester.test_cond(self.y_cond, x_tot_cond_fwdbwd[:, :, :self.args.test_npar], 
+                                                          self.args.data, i, n, fb, tag='fwdbwd'))
                 test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
                 
                 self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
                              self.args.data, self.save_init_dl, self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
+                self.plotter.plot_sequence_cond(self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar], 
+                                                self.args.data, i, n, fb, tag='fwdbwd')
 
+    def backward_sample(self, y_c, num_samples=None, final_batch_x=None):
+        if self.accelerator.is_main_process:
+            if self.args.ema:
+                sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
+            else:
+                sample_net = self.net['b']
+
+            with torch.no_grad():
+                # self.set_seed(seed=0 + self.accelerator.process_index)
+                if final_batch_x is not None:
+                    final_batch_x = final_batch_x.to(self.device)
+                else:
+                    final_batch_x = self.mean_final + self.std_final * torch.randn((num_samples, *self.shape_x),
+                                                                                   device=self.device)
+                y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
+                x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True)
+
+                x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
+
+        return x_tot_c
+
+    def forward_backward_sample(self, y_c, init_batch_x, init_batch_y, n):
+        if self.accelerator.is_main_process:
+            if self.args.ema:
+                sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
+            else:
+                sample_net = self.net['f']
+
+            with torch.no_grad():
+                # self.set_seed(seed=0 + self.accelerator.process_index)
+                init_batch_x = init_batch_x.to(self.device)
+                init_batch_y = init_batch_y.to(self.device)
+                if n == 1:
+                    x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y)
+                else:
+                    x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+
+            final_batch_x = x_tot[:, -1]
+
+        return self.backward_sample(y_c, final_batch_x=final_batch_x)
                 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)

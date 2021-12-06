@@ -1,0 +1,33 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - job
+  - dataset: lorenz #celeba, 2d, stackedmnist
+  - model: BasicCond #Basic, UNET
+
+name: "lorenz"
+
+
+# logging
+LOGGER: CSV # NEPTUNE, CSV, NONE
+CSV_log_dir: ./
+
+# training
+cache_gpu: False
+num_cache_batches: 1
+cache_refresh_stride: 1000
+plot_level: 1
+mean_match: True
+paths:
+  experiments_dir_name: experiments
+  data_dir_name: data
+
+# checkpoint
+checkpoint_run: False
+checkpoint_it: 13
+checkpoint_pass: b  # b or f (skip b ipf run)
+sample_checkpoint_f: ""
+sample_checkpoint_b: ""
+checkpoint_f: ""
+checkpoint_b: ""

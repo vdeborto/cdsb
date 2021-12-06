@@ -102,15 +102,17 @@ class IPFBase(torch.nn.Module):
         self.stride = self.args.gif_stride
         self.stride_log = self.args.log_stride
 
-        if isinstance(self.args.y_cond, str):
-            self.y_cond = eval(self.args.y_cond).to(self.device)
-        else:
-            self.y_cond = list(self.args.y_cond)
-            for j in range(len(self.y_cond)):
-                if isinstance(self.y_cond[j], str):
-                    self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
-            self.y_cond = torch.stack(self.y_cond, dim=0)
-        
+        self.y_cond = self.args.y_cond
+        if self.y_cond is not None:
+            if isinstance(self.y_cond, str):
+                self.y_cond = eval(self.y_cond).to(self.device)
+            else:
+                self.y_cond = list(self.y_cond)
+                for j in range(len(self.y_cond)):
+                    if isinstance(self.y_cond[j], str):
+                        self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
+                self.y_cond = torch.stack(self.y_cond, dim=0)
+
 
     def get_logger(self, name='logs'):
         return get_logger(self.args, name)
@@ -359,7 +361,7 @@ class IPFBase(torch.nn.Module):
                 self.plotter.plot_sequence_cond(self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar], 
                                                 self.args.data, i, n, fb, tag='fwdbwd')
 
-    def backward_sample(self, y_c, num_samples=None, final_batch_x=None):
+    def backward_sample(self, y_c, num_samples=None, final_batch_x=None, fix_seed=False):
         if self.accelerator.is_main_process:
             if self.args.ema:
                 sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
@@ -380,7 +382,7 @@ class IPFBase(torch.nn.Module):
 
         return x_tot_c
 
-    def forward_backward_sample(self, y_c, init_batch_x, init_batch_y, n):
+    def forward_backward_sample(self, y_c, init_batch_x, init_batch_y, n, fix_seed=False):
         if self.accelerator.is_main_process:
             if self.args.ema:
                 sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])

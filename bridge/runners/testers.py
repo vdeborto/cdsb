@@ -10,6 +10,15 @@ class Tester:
     def __init__(self):
         pass
 
+    def test_joint(self, *args, **kwargs):
+        return {}
+
+    def test_cond(self, *args, **kwargs):
+        return {}
+
+    def __call__(self, *args, **kwargs):
+        return {}
+
 
 class OneDCondTester(Tester):
     def __init__(self):
@@ -73,7 +82,7 @@ class FiveDCondTester(Tester):
     def test_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag=''):
         out = {}
 
-        if fb == 'b':
+        if fb == 'b' and y_cond is not None:
             if data == 'type1':
                 true_x_test_mean = (y_cond[:, 0]**2 + torch.exp(y_cond[:, 1] + y_cond[:, 2]/3) + torch.sin(y_cond[:, 3] + y_cond[:, 4])).unsqueeze(1)
                 true_x_test_std = torch.ones(2000, 1)

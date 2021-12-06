@@ -4,12 +4,13 @@ from ..models import *
 from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
+from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
-from .plotters import OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
-from .testers import OneDCondTester, FiveDCondTester
+from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
+from .testers import Tester, OneDCondTester, FiveDCondTester
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -28,15 +29,16 @@ def get_plotter(runner, args):
     elif dataset_tag == DATASET_2D:
         return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
-        return ImPlotter(plot_level = args.plot_level)
+        return Plotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
 
 def get_tester(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
         return OneDCondTester()
-    
     elif dataset_tag == DATASET_5D_COND:
         return FiveDCondTester()
+    else:
+        return Tester()
 
 # Model
 #--------------------------------------------------------------------------------
@@ -98,8 +100,8 @@ def get_models(args):
                     "use_scale_shift_norm": args.model.use_scale_shift_norm
                 }
 
-        net_f, net_b = UNetModel(**kwargs), UNetModel(**kwargs)   
-    print(net_b)   
+        net_f, net_b = UNetModel(**kwargs), UNetModel(**kwargs)
+
     return net_f, net_b
 
 # Optimizer
@@ -116,6 +118,7 @@ DATASET_1D_COND = '1d_cond'
 DATASET_5D_COND = '5d_cond'
 DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_2D = '2d'
+DATASET_LORENZ = 'lorenz'
 DATASET_CELEBA = 'celeba'
 DATASET_STACKEDMNIST = 'stackedmnist'
 DATASET_EMNIST = 'emnist'
@@ -256,6 +259,50 @@ def get_datasets(args):
             var_final = eval(args.var_final)
             final_ds = None
         
+
+    return init_ds, final_ds, mean_final, var_final
+
+
+def get_filtering_process(args):
+    dataset_tag = getattr(args, DATASET)
+
+    data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
+
+    if dataset_tag == DATASET_LORENZ:
+        data_tag = args.data
+        root = os.path.join(data_dir, 'lorenz')
+        x, y = lorenz_process(root, data_tag)
+
+    return x, y
+
+
+def get_filtering_datasets(x_tm1, args):
+    dataset_tag = getattr(args, DATASET)
+
+    if dataset_tag == DATASET_LORENZ:
+        data_tag = args.data
+        init_ds = lorenz_ds(x_tm1, data_tag)
+
+    assert not args.transfer
+
+    if not(args.transfer):
+        if args.adaptive_mean:
+            NAPPROX = 100
+            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
+            mean_final = vec.mean()
+            mean_final = vec[0] * 0 + mean_final
+            var_final = eval(args.var_final)
+            final_ds = None
+        elif args.final_adaptive:
+            NAPPROX = 100
+            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
+            mean_final = vec.mean(axis=0)
+            var_final = vec.var()
+            final_ds = None
+        else:
+            mean_final = eval(args.mean_final)
+            var_final = eval(args.var_final)
+            final_ds = None
 
     return init_ds, final_ds, mean_final, var_final
 

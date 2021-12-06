@@ -19,6 +19,7 @@ def main(args):
     init_ds, final_ds, mean_final, var_final = get_datasets(args)
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args)
+    print(ipf.net['b'])
     ipf.train()
     
 

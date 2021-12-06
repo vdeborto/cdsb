@@ -26,14 +26,62 @@ def make_gif(plot_paths, output_directory='./gif', gif_name='gif'):
 
 class Plotter(object):
 
-    def __init__(self):
+    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
+
+        existing_versions = []
+        for d in os.listdir(im_dir):
+            if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
+                existing_versions.append(int(d.split("_")[1]))
+
+        if len(existing_versions) == 0:
+            version = 0
+        else:
+            version = max(existing_versions) + 1
+
+        self.im_dir = os.path.join(im_dir, f"version_{version}")
+        self.gif_dir = os.path.join(gif_dir, f"version_{version}")
+        os.makedirs(self.im_dir, exist_ok=True)
+        os.makedirs(self.gif_dir, exist_ok=True)
+
+        self.num_steps = num_steps
+        self.gammas = gammas
+
+    def plot(self, *args, **kwargs):
         pass
 
-    def plot(self, x_tot_plot, net, i, n, forward_or_backward):
-        pass
+    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
+        self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb)
+        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
 
-    def __call__(self, initial_sample, x_tot_plot, net, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, net, i, n, forward_or_backward)
+    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps // min(self.num_steps, 50)
+        name = str(i) + '_' + fb + '_' + str(n) + '_' + tag + '_'
+
+        x = x.cpu().numpy()
+
+        name_gif = name + 'histogram'
+        plot_paths_reg = []
+        x_min, x_max = np.min(x), np.max(x)
+        for k in range(self.num_steps):
+            if k % freq == 0:
+                filename = name_gif + '_' + str(k) + '.png'
+                filename = os.path.join(self.im_dir, filename)
+                plt.clf()
+                if n is not None:
+                    str_title = 'IPFP iteration: ' + str(n)
+                    plt.title(str_title)
+                for dim in range(x.shape[-1]):
+                    plt.hist(x[k, :, dim], bins=50, density=True, range=(x_min, x_max), alpha=0.5)
+                plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                plot_paths_reg.append(filename)
+
+        make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+
+    def plot_sequence_cond(self, *args, **kwargs):
+        pass
 
 
 class ImPlotter(object):
@@ -211,7 +259,7 @@ class OneDCondPlotter(Plotter):
             colors = ['red', 'blue']
         
         # HISTOGRAMS
-        name_gif = name + 'histogram'
+        name_gif = name + 'cond_histogram'
         plot_paths_reg = []
 
         if fb == 'b' and y_cond is not None:
@@ -247,7 +295,7 @@ class OneDCondPlotter(Plotter):
                         plt.plot(x_lin, zs_lin[j], color=colors[j])
                         plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
 
-                    filename = name + 'histogram_' + str(k) + '.png'
+                    filename = name_gif + '_' + str(k) + '.png'
                     filename = os.path.join(self.im_dir, filename)
 
                     if n is not None:
@@ -294,7 +342,7 @@ class FiveDCondPlotter(Plotter):
             xlim = [-3.5,3.5]
 
         # HISTOGRAMS
-        name_gif = name + 'histogram'
+        name_gif = name + 'cond_histogram'
         plot_paths_reg = []
 
         if fb == 'b' and y_cond is not None:
@@ -336,7 +384,7 @@ class FiveDCondPlotter(Plotter):
                         plt.plot(x_lin, zs_lin[j], color="C"+str(j))
                         plt.plot(x_lin, x_cond_kde, color="C"+str(j), ls="--")
 
-                    filename = name + 'histogram_' + str(k) + '.png'
+                    filename = name_gif + '_' + str(k) + '.png'
                     filename = os.path.join(self.im_dir, filename)
 
                     if n is not None:
@@ -357,7 +405,7 @@ class FiveDCondPlotter(Plotter):
                         zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])
                     raw_data_save['px_y_kde'] = zs_cond_kde
                     os.makedirs(os.path.join(self.im_dir, 'raw_data'), exist_ok=True)
-                    torch.save(raw_data_save, os.path.join(self.im_dir, 'raw_data', name + 'histogram_' + str(k) + '.pt'))
+                    torch.save(raw_data_save, os.path.join(self.im_dir, 'raw_data', name_gif + '_' + str(k) + '.pt'))
 
             make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)  
     

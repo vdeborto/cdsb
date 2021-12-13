@@ -111,6 +111,9 @@ class IPFBase(torch.nn.Module):
                 for j in range(len(self.y_cond)):
                     if isinstance(self.y_cond[j], str):
                         self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
+                    else:
+                        self.y_cond[j] = torch.tensor([self.y_cond[j]]).to(self.device)
+
                 self.y_cond = torch.stack(self.y_cond, dim=0)
 
 

@@ -69,3 +69,23 @@ class Stacked_MNIST(Dataset):
 
     def __len__(self):
         return len(self.targets)
+
+
+class Cond_Stacked_MNIST(Stacked_MNIST):
+    def __init__(self, args, root="./dataset", load=True, source_root=None, imageSize=28,
+                 train=True, num_channels=3, device='cpu'):
+        super().__init__(root, load, source_root, imageSize, train, num_channels, device)
+        if args.task == 'SuperRes':
+            factor = args.factor
+            downsample_kernel = torch.ones(num_channels, 1, factor, factor)
+            downsample_kernel = downsample_kernel / factor ** 2
+
+            self.y_data = torch.nn.functional.conv2d(self.data, downsample_kernel, stride=factor,
+                                                     groups=num_channels)
+        else:
+            raise NotImplementedError
+
+    def __getitem__(self, index):
+        img, targets = self.data[index], self.y_data[index]
+
+        return img, targets

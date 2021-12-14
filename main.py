@@ -20,6 +20,7 @@ def main(args):
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args)
     print(ipf.net['b'])
+    print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
     ipf.train()
     
 

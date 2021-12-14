@@ -289,8 +289,8 @@ class IPFBase(torch.nn.Module):
 
     def save_step(self,i, n, fb):
         if self.accelerator.is_main_process:
-            if i % self.stride == 0:
-                
+            if i % self.stride == 0 or i == self.num_iter:
+
                 if self.args.ema:
                     sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
                 else:
@@ -318,7 +318,8 @@ class IPFBase(torch.nn.Module):
                     if fb == 'f':
                         batch = next(self.save_init_dl)
                         batch_x = batch[0].to(self.device)
-                        batch_y = batch[1].to(self.device)                                         
+                        batch_y = batch[1].to(self.device)
+                        init_batch_x = batch_x
                     elif self.args.transfer:
                         batch = next(self.save_final_dl)[0]
                         batch = batch.to(self.device)
@@ -345,24 +346,28 @@ class IPFBase(torch.nn.Module):
                             x_tot_c = self.backward_sample(self.y_cond[k], final_batch_x=batch_x)
                             x_tot_cond = torch.cat([x_tot_cond, x_tot_c.cpu().unsqueeze(0)], dim=0)
 
-                            x_tot_c_fwdbwd = self.forward_backward_sample(self.y_cond[k], init_batch_x, init_batch_y, n)
+                            x_tot_fwd, x_tot_c_fwdbwd = self.forward_backward_sample(init_batch_x, init_batch_y, self.y_cond[k], n,
+                                                                                     return_fwd_tot=True)
                             x_tot_cond_fwdbwd = torch.cat([x_tot_cond_fwdbwd, x_tot_c_fwdbwd.cpu().unsqueeze(0)], dim=0)
 
                 test_metrics = self.tester(
-                    batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
-                    x_tot_plot[:, :self.args.test_npar], y_tot_plot[:, :self.args.test_npar],
-                    x_tot_cond[:, :, :self.args.test_npar], self.y_cond,
-                    self.args.data, self.save_init_dl, i, n, fb
+                    batch_x[:self.args.test_npar], batch_y[:self.args.test_npar], x_tot_plot[:, :self.args.test_npar],
+                    self.y_cond, x_tot_cond[:, :, :self.args.test_npar], init_batch_x[:self.args.test_npar],
+                    self.args.data, i, n, fb
                 )
                 test_metrics.update(self.tester.test_cond(self.y_cond, x_tot_cond_fwdbwd[:, :, :self.args.test_npar], 
                                                           self.args.data, i, n, fb, tag='fwdbwd'))
                 test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
-                
-                self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
-                             self.args.data, self.save_init_dl, self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], i, n, fb)
-                self.plotter.plot_sequence_cond(self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar], 
-                                                self.args.data, i, n, fb, tag='fwdbwd')
+
+                self.plotter(batch_x[:self.args.plot_npar], batch_y[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar],
+                             self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], init_batch_x[:self.args.plot_npar],
+                             self.args.data, i, n, fb)
+                if self.y_cond is not None and not self.args.transfer and fb == 'b':
+                    self.plotter.plot_sequence_cond_fwdbwd(init_batch_x[:self.args.plot_npar], init_batch_y[:self.args.plot_npar],
+                                                           x_tot_fwd[:, :self.args.plot_npar],
+                                                           self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar],
+                                                           self.args.data, i, n, fb)
 
     def backward_sample(self, y_c, num_samples=None, final_batch_x=None, fix_seed=False):
         if self.accelerator.is_main_process:
@@ -385,7 +390,7 @@ class IPFBase(torch.nn.Module):
 
         return x_tot_c
 
-    def forward_backward_sample(self, y_c, init_batch_x, init_batch_y, n, fix_seed=False):
+    def forward_sample(self, init_batch_x, init_batch_y, n, fix_seed=False):
         if self.accelerator.is_main_process:
             if self.args.ema:
                 sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
@@ -401,10 +406,17 @@ class IPFBase(torch.nn.Module):
                 else:
                     x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
 
-            final_batch_x = x_tot[:, -1]
+            x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
 
-        return self.backward_sample(y_c, final_batch_x=final_batch_x)
-                
+        return x_tot
+
+    def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fix_seed=False, return_fwd_tot=False):
+        x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fix_seed=fix_seed)
+        final_batch_x = x_tot[-1]
+        if return_fwd_tot:
+            return x_tot, self.backward_sample(y_c, final_batch_x=final_batch_x, fix_seed=fix_seed)
+        return self.backward_sample(y_c, final_batch_x=final_batch_x, fix_seed=fix_seed)
+
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
         random.seed(seed)
@@ -492,15 +504,18 @@ class IPFSequential(IPFBase):
                 y_tot_plot = y_tot.detach()#.cpu().numpy()
                 
                 test_metrics = self.tester(
-                        batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
-                        x_tot_plot[:, :self.args.test_npar], y_tot_plot[:, :self.args.test_npar],
-                        None, None, self.args.data, self.save_init_dl, 0, 0, 'f'
-                    )
+                    batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
+                    x_tot_plot[:, :self.args.test_npar], None, None, batch_x[:self.args.test_npar],
+                    self.args.data, 0, 0, 'f'
+                )
                 test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=0)
-                
-                self.plotter(batch_x[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar], y_tot_plot[:, :self.args.plot_npar],
-                                self.args.data, self.save_init_dl, None, None, 0, 0, 'f')
+
+                self.plotter(
+                    batch_x[:self.args.plot_npar], batch_y[:self.args.plot_npar],
+                    x_tot_plot[:, :self.args.plot_npar], None, None, batch_x[:self.args.plot_npar],
+                    self.args.data, 0, 0, 'f'
+                )
 
             x_tot_plot = None
             x_tot = None

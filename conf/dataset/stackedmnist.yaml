@@ -7,6 +7,11 @@ data:
   category: ""
   image_size: 28
   channels: 1
+y_cond: null
+
+# task
+task: SuperRes
+factor: 4
 
 # transfer
 transfer: False
@@ -29,6 +34,7 @@ pin_memory: True
 log_stride : 10
 gif_stride: 5000
 plot_npar: 100
+test_npar: 100
 
 # training
 cache_npar: 1000

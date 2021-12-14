@@ -16,57 +16,43 @@ class Tester:
     def test_cond(self, *args, **kwargs):
         return {}
 
-    def __call__(self, *args, **kwargs):
-        return {}
+    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None):
+        x_last = x_tot[-1]
+
+        x_var_last = torch.var(x_last).item()
+        x_var_start = torch.var(x_start).item()
+        x_mean_last = torch.mean(x_last).item()
+        x_mean_start = torch.mean(x_start).item()
+
+        out = {'FB': fb,
+               'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
+               'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
+
+        out.update(self.test_joint(y_start, x_tot, x_init, data, i, n, fb))
+        out.update(self.test_cond(y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond))
+
+        return out
 
 
 class OneDCondTester(Tester):
     def __init__(self):
         super().__init__()
 
-    def test_joint(self, x_tot, y_tot, data, init_dl, i, n, fb, tag=''):
+    def test_joint(self, y_start, x_tot, x_init, data, i, n, fb, tag=''):
         out = {}
 
         if fb == 'b':
-            x_final = x_tot[-1]
-            y_final = y_tot[-1]
+            y_start = y_start.detach().cpu().numpy()
+            x_last = x_tot[-1].detach().cpu().numpy()
+            last_kde = lambda xy: kde.gaussian_kde([x_last[:, 0], y_start[:, 0]])(xy.T)
 
-            x_final = x_final.detach().cpu().numpy()
-            y_final = y_final.detach().cpu().numpy()
+            x_init = x_init.detach().cpu().numpy()
+            data_kde = lambda xy: kde.gaussian_kde([x_init[:, 0], y_start[:, 0]])(xy.T)
 
-            final_kde = lambda xy: kde.gaussian_kde([x_final[:, 0], y_final[:, 0]])(xy.T)
+            batch = np.hstack([x_init, y_start])
 
-            batch = next(init_dl)
-            x_batch = batch[0].cpu().numpy()
-            y_batch = batch[1].cpu().numpy()
-            true_kde = lambda xy: kde.gaussian_kde([x_batch[:, 0], y_batch[:, 0]])(xy.T)
-
-            batch = np.hstack([x_batch, y_batch])
-
-            out["l2_pq_" + tag] = np.mean((true_kde(batch) - final_kde(batch))**2)
-            out["kl_pq_" + tag] = np.mean(np.log(true_kde(batch)) - np.log(final_kde(batch)))
-
-        return out
-
-    def test_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag=''):
-        out = {}
-        return out
-
-    def __call__(self, x_init, y_init, x_tot, y_tot, x_tot_cond, y_cond, data, init_dl, i, n, fb):
-        x_final = x_tot[-1]
-        y_final = y_tot[-1]
-        
-        x_var_final = torch.var(x_final)
-        x_var_init = torch.var(x_init)
-        x_mean_final = torch.mean(x_final)
-        x_mean_init = torch.mean(x_init)
-
-        out = {'FB': fb,
-               'x_mean_init': x_mean_init, 'x_var_init': x_var_init,
-               'x_mean_final': x_mean_final, 'x_var_final': x_var_final}
-
-        out.update(self.test_joint(x_tot, y_tot, data, init_dl, i, n, fb))
-        out.update(self.test_cond(y_cond, x_tot_cond, data, i, n, fb))
+            out["l2_pq_" + tag] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
+            out["kl_pq_" + tag] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
 
         return out
 
@@ -75,11 +61,7 @@ class FiveDCondTester(Tester):
     def __init__(self):
         super().__init__()
 
-    def test_joint(self, x_tot, y_tot, data, init_dl, i, n, fb, tag=''):
-        out = {}
-        return out
-
-    def test_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag=''):
+    def test_cond(self, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
         out = {}
 
         if fb == 'b' and y_cond is not None:
@@ -106,24 +88,6 @@ class FiveDCondTester(Tester):
             out["mse_mean_" + tag] = torch.mean((x_tot_cond_mean - true_x_test_mean)**2)
             out["mse_std_" + tag] = torch.mean((x_tot_cond_std - true_x_test_std)**2)
 
-        return out
-
-    def __call__(self, x_init, y_init, x_tot, y_tot, x_tot_cond, y_cond, data, init_dl, i, n, fb):
-        x_final = x_tot[-1]
-        y_final = y_tot[-1]
-        
-        x_var_final = torch.var(x_final)
-        x_var_init = torch.var(x_init)
-        x_mean_final = torch.mean(x_final)
-        x_mean_init = torch.mean(x_init)
-
-        out = {'FB': fb,
-               'x_mean_init': x_mean_init, 'x_var_init': x_var_init,
-               'x_mean_final': x_mean_final, 'x_var_final': x_var_final}
-
-        out.update(self.test_joint(x_tot, y_tot, data, init_dl, i, n, fb))
-        out.update(self.test_cond(y_cond, x_tot_cond, data, i, n, fb))
-        
         return out
 
 

@@ -203,7 +203,7 @@ class UNetModel(nn.Module):
         self.output_blocks.apply(convert_module_to_f32)
 
 
-    def forward(self, x, timesteps, y=None):
+    def forward(self, x, y, timesteps):
 
         """
         Apply the model to an input batch.
@@ -235,7 +235,7 @@ class UNetModel(nn.Module):
         h = h.type(x.dtype)
         return self.out(h)
 
-    def get_feature_vectors(self, x, timesteps, y=None):
+    def get_feature_vectors(self, x, y, timesteps):
         """
         Apply the model and return all of the intermediate tensors.
         :param x: an [N x C x ...] Tensor of inputs.
@@ -274,16 +274,17 @@ class SuperResModel(UNetModel):
     """
 
     def __init__(self, in_channels, *args, **kwargs):
-        super().__init__(in_channels * 2, *args, **kwargs)
+        super().__init__(in_channels*2, *args, **kwargs)
+        self.locals[0] = in_channels
 
-    def forward(self, x, timesteps, low_res=None, **kwargs):
+    def forward(self, x, low_res, timesteps, **kwargs):
         _, _, new_height, new_width = x.shape
         upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
         x = th.cat([x, upsampled], dim=1)
-        return super().forward(x, timesteps, **kwargs)
+        return super().forward(x, None, timesteps, **kwargs)
 
-    def get_feature_vectors(self, x, timesteps, low_res=None, **kwargs):
+    def get_feature_vectors(self, x, low_res, timesteps, **kwargs):
         _, new_height, new_width, _ = x.shape
         upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
         x = th.cat([x, upsampled], dim=1)
-        return super().get_feature_vectors(x, timesteps, **kwargs)
+        return super().get_feature_vectors(x, None, timesteps, **kwargs)

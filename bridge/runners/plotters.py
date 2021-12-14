@@ -4,7 +4,6 @@ import matplotlib
 import torch
 import torchvision.utils as vutils
 from PIL import Image
-from ..data.two_dim import data_distrib
 import os, sys
 matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
@@ -48,143 +47,135 @@ class Plotter(object):
         self.num_steps = num_steps
         self.gammas = gammas
 
-    def plot(self, *args, **kwargs):
-        pass
+    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None):
+        self.plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb)
+        self.plot_sequence_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond)
 
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb)
-        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
-
-    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
-        name = str(i) + '_' + fb + '_' + str(n) + '_' + tag + '_'
+        name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, name)
+        name = name + tag
 
-        x = x.cpu().numpy()
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
 
-        name_gif = name + 'histogram'
+        x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
+
+        name_gif = name + '_histogram'
         plot_paths_reg = []
-        x_min, x_max = np.min(x), np.max(x)
+        x_min, x_max = np.min(x_tot), np.max(x_tot)
+        dims = np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False)
         for k in range(self.num_steps):
             if k % freq == 0:
                 filename = name_gif + '_' + str(k) + '.png'
-                filename = os.path.join(self.im_dir, filename)
+                filename = os.path.join(im_dir, filename)
                 plt.clf()
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
-                for dim in range(x.shape[-1]):
-                    plt.hist(x[k, :, dim], bins=50, density=True, range=(x_min, x_max), alpha=0.5)
+
+                for dim in dims:
+                    plt.hist(x_tot[k, :, dim], bins=50, density=True, range=(x_min, x_max), alpha=0.5)
                 plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
                 plot_paths_reg.append(filename)
 
         make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
 
-    def plot_sequence_cond(self, *args, **kwargs):
+    def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         pass
 
+    def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
+                                  x_init_cond=None, tag='fwdbwd', freq=None):
+        pass
 
-class ImPlotter(object):
+class ImPlotter(Plotter):
 
-    def __init__(self, im_dir = './im', gif_dir='./gif', plot_level=3):
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
-        if not os.path.isdir(gif_dir):
-            os.mkdir(gif_dir)
-        self.im_dir = im_dir
-        self.gif_dir = gif_dir
+    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif', plot_level=3):
+        super().__init__(num_steps, gammas, im_dir, gif_dir)
         self.num_plots = 100
-        self.num_digits = 20
+        # self.num_digits = 20
         self.plot_level = plot_level
-        
 
-    def plot(self, initial_sample, x_tot_plot, i, n, forward_or_backward):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
+        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq)
+        if freq is None:
+            freq = self.num_steps // min(self.num_steps, 50)
+
         if self.plot_level > 0:
-            x_tot_plot = x_tot_plot[:,:self.num_plots]
-            name = '{0}_{1}_{2}'.format(forward_or_backward, n, i)
+            x_tot = x_tot[:, :self.num_plots]
+            name = str(i) + '_' + fb + '_' + str(n) + '_'
             im_dir = os.path.join(self.im_dir, name)
-            
+            name = name + tag
+
             if not os.path.isdir(im_dir):
-                os.mkdir(im_dir)         
-            
+                os.mkdir(im_dir)
+
             if self.plot_level > 0:
                 plt.clf()
-                filename_grid_png = os.path.join(im_dir, 'im_grid_first.png')
-                vutils.save_image(initial_sample, filename_grid_png, nrow=10)
-                filename_grid_png = os.path.join(im_dir, 'im_grid_final.png')
-                vutils.save_image(x_tot_plot[-1], filename_grid_png, nrow=10)
+                filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
+                vutils.save_image(x_start, filename_grid_png, nrow=10)
+                filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
+                vutils.save_image(x_tot[-1], filename_grid_png, nrow=10)
+                filename_grid_png = os.path.join(im_dir, 'im_grid_data.png')
+                vutils.save_image(x_init, filename_grid_png, nrow=10)
 
             if self.plot_level >= 2:
                 plt.clf()
                 plot_paths = []
-                num_steps, num_particles, channels, H, W = x_tot_plot.shape
-                plot_steps = np.linspace(0,num_steps-1,self.num_plots, dtype=int) 
 
-                for k in plot_steps:
-                    # save png
-                    filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))    
-                    plot_paths.append(filename_grid_png)
-                    vutils.save_image(x_tot_plot[k], filename_grid_png, nrow=10)
-                    
+                for k in range(self.num_steps):
+                    if k % freq == 0:
+                        # save png
+                        filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))
+                        plot_paths.append(filename_grid_png)
+                        vutils.save_image(x_tot[k], filename_grid_png, nrow=10)
 
-                make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name)
-
-    def __call__(self, initial_sample, x_tot_plot, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, i, n, forward_or_backward)
+                make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
 
 
-class TwoDPlotter(Plotter):
-
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
-
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
-        if not os.path.isdir(gif_dir):
-            os.mkdir(gif_dir)
-
-        self.im_dir = im_dir
-        self.gif_dir = gif_dir
-
-        self.num_steps = num_steps
-        self.gammas = gammas
-
-    def plot(self, initial_sample, x_tot_plot, i, n, forward_or_backward):
-        fb = forward_or_backward
-        ipf_it = n
-        x_tot_plot = x_tot_plot.cpu().numpy()
-        name = str(i) + '_' + fb +'_' + str(n) + '_'
-
-        save_sequence(num_steps=self.num_steps, x=x_tot_plot, name=name,
-                      xlim=(-15,15), ylim=(-15,15), ipf_it=ipf_it,
-                      freq=self.num_steps//min(self.num_steps,50),
-                      im_dir=self.im_dir, gif_dir=self.gif_dir)
-
-
-    def __call__(self, initial_sample, x_tot_plot, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, i, n, forward_or_backward)
+# class TwoDPlotter(Plotter):
+#
+#     def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
+#
+#         if not os.path.isdir(im_dir):
+#             os.mkdir(im_dir)
+#         if not os.path.isdir(gif_dir):
+#             os.mkdir(gif_dir)
+#
+#         self.im_dir = im_dir
+#         self.gif_dir = gif_dir
+#
+#         self.num_steps = num_steps
+#         self.gammas = gammas
+#
+#     def plot(self, x_start, x_tot, i, n, forward_or_backward):
+#         fb = forward_or_backward
+#         ipf_it = n
+#         x_tot = x_tot.cpu().numpy()
+#         name = str(i) + '_' + fb +'_' + str(n) + '_'
+#
+#         save_sequence(num_steps=self.num_steps, x=x_tot, name=name,
+#                       xlim=(-15,15), ylim=(-15,15), ipf_it=ipf_it,
+#                       freq=self.num_steps//min(self.num_steps,50),
+#                       im_dir=self.im_dir, gif_dir=self.gif_dir)
+#
+#
+#     def __call__(self, x_start, x_tot, i, n, forward_or_backward):
+#         self.plot(x_start, x_tot, i, n, forward_or_backward)
 
 
 class OneDCondPlotter(Plotter):
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
-        if not os.path.isdir(gif_dir):
-            os.mkdir(gif_dir)
-
-        self.im_dir = im_dir
-        self.gif_dir = gif_dir
-
-        self.num_steps = num_steps
-        self.gammas = gammas
-
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        self.plot_sequence_joint(x_tot_plot, y_tot_plot, data, init_dl, i, n, fb)
-        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
-    
-    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
+        name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, name)
+        name = name + tag
+
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
 
         ylim = [-3, 3]
         npts = 250
@@ -206,33 +197,31 @@ class OneDCondPlotter(Plotter):
         
         # DENSITY
         # ROLES OF X AND Y inversed when compared to Conditional Sampling.
-        
-        x = x.cpu().numpy()
-        y = y.cpu().numpy()
+
+        x_start = x_start.cpu().numpy()
+        y_start = y_start.cpu().numpy()
+        x_tot = x_tot.cpu().numpy()
 
         if n == 0 and fb == "f":
             filename = 'original_density.png'
             filename = os.path.join(self.im_dir, filename)
-            batch = next(init_dl)
-            batch_x = batch[0].cpu().numpy()
-            batch_y = batch[1].cpu().numpy()
-            k = kde.gaussian_kde([batch_y[:,0],batch_x[:,0]])
+            k = kde.gaussian_kde([y_start[:,0], x_start[:,0]])
             xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
             zi = k(np.vstack([xi.flatten(), yi.flatten()]))
             plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
             plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)                
 
-        name_gif = name + 'density'
+        name_gif = name + '_density'
         plot_paths_reg = []
         for k in range(self.num_steps):
             if k % freq == 0:
-                filename =  name + 'density_' + str(k) + '.png'
-                filename = os.path.join(self.im_dir, filename)
+                filename = name_gif + '_' + str(k) + '.png'
+                filename = os.path.join(im_dir, filename)
                 plt.clf()            
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
-                k = kde.gaussian_kde([y[k, :, 0],x[k, :, 0]])
+                k = kde.gaussian_kde([y_start[:, 0], x_tot[k, :, 0]])
                 xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
                 zi = k(np.vstack([xi.flatten(), yi.flatten()]))
                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
@@ -241,10 +230,15 @@ class OneDCondPlotter(Plotter):
 
         make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)    
 
-    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=None):
+    def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
+        name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, name)
+        name = name + tag
+
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
         
         ylim = [-3, 3]
         npts = 250
@@ -259,7 +253,7 @@ class OneDCondPlotter(Plotter):
             colors = ['red', 'blue']
         
         # HISTOGRAMS
-        name_gif = name + 'cond_histogram'
+        name_gif = name + '_cond_histogram'
         plot_paths_reg = []
 
         if fb == 'b' and y_cond is not None:
@@ -296,7 +290,7 @@ class OneDCondPlotter(Plotter):
                         plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
 
                     filename = name_gif + '_' + str(k) + '.png'
-                    filename = os.path.join(self.im_dir, filename)
+                    filename = os.path.join(im_dir, filename)
 
                     if n is not None:
                         str_title = 'IPFP iteration: ' + str(n)
@@ -304,32 +298,23 @@ class OneDCondPlotter(Plotter):
                     plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                     plot_paths_reg.append(filename)
         
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)  
+            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+
+    def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
+                                  x_init_cond=None, tag='fwdbwd', freq=None):
+        self.plot_sequence_cond(x_tot_fwd[-1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
 
 class FiveDCondPlotter(Plotter):
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
-        if not os.path.isdir(gif_dir):
-            os.mkdir(gif_dir)
-
-        self.im_dir = im_dir
-        self.gif_dir = gif_dir
-
-        self.num_steps = num_steps
-        self.gammas = gammas
-
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, fb):
-        self.plot_sequence_cond(y_cond, x_tot_cond, data, i, n, fb)
-    
-    def plot_sequence_joint(self, x, y, data, init_dl, i, n, fb, tag='', freq=None):
-        pass
-
-    def plot_sequence_cond(self, y_cond, x_tot_cond, data, i, n, fb, tag='', freq=None):
+    def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb +'_' + str(n) + '_' + tag + '_'
+        name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, name)
+        name = name + tag
+
+        if not os.path.isdir(im_dir):
+            os.mkdir(im_dir)
         
         npts = 250
         if data == 'type1':
@@ -342,7 +327,7 @@ class FiveDCondPlotter(Plotter):
             xlim = [-3.5,3.5]
 
         # HISTOGRAMS
-        name_gif = name + 'cond_histogram'
+        name_gif = name + '_cond_histogram'
         plot_paths_reg = []
 
         if fb == 'b' and y_cond is not None:
@@ -385,7 +370,7 @@ class FiveDCondPlotter(Plotter):
                         plt.plot(x_lin, x_cond_kde, color="C"+str(j), ls="--")
 
                     filename = name_gif + '_' + str(k) + '.png'
-                    filename = os.path.join(self.im_dir, filename)
+                    filename = os.path.join(im_dir, filename)
 
                     if n is not None:
                         str_title = 'IPFP iteration: ' + str(n)
@@ -404,11 +389,14 @@ class FiveDCondPlotter(Plotter):
                         z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
                         zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])
                     raw_data_save['px_y_kde'] = zs_cond_kde
-                    os.makedirs(os.path.join(self.im_dir, 'raw_data'), exist_ok=True)
-                    torch.save(raw_data_save, os.path.join(self.im_dir, 'raw_data', name_gif + '_' + str(k) + '.pt'))
+                    torch.save(raw_data_save, os.path.join(im_dir, name_gif + '_raw_data_' + str(k) + '.pt'))
 
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)  
-    
+            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+
+    def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
+                                  x_init_cond=None, tag='fwdbwd', freq=None):
+        self.plot_sequence_cond(x_tot_fwd[-1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+
 
 class BiochemicalPlotter(Plotter):
 
@@ -425,14 +413,14 @@ class BiochemicalPlotter(Plotter):
         self.num_steps = num_steps
         self.gammas = gammas
 
-    def plot(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+    def plot(self, x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
         fb = forward_or_backward
         ipf_it = n
-        x_tot_plot = x_tot_plot.cpu().numpy()
-        y_tot_plot = y_tot_plot.cpu().numpy()
+        x_tot = x_tot.cpu().numpy()
+        y_tot = y_tot.cpu().numpy()
         name = str(i) + '_' + fb +'_' + str(n) + '_'
 
-        self.save_sequence_cond_biochemical(num_steps=self.num_steps, x=x_tot_plot, y=y_tot_plot,
+        self.save_sequence_cond_biochemical(num_steps=self.num_steps, x=x_tot, y=y_tot,
                            data=data, init_dl=init_dl, y_cond=y_cond,
                            x_tot_cond=x_tot_cond, fb=fb, name=name,
                            ipf_it=ipf_it,
@@ -440,8 +428,8 @@ class BiochemicalPlotter(Plotter):
                            im_dir=self.im_dir, gif_dir=self.gif_dir)
 
 
-    def __call__(self, initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
-        self.plot(initial_sample, x_tot_plot, y_tot_plot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
+    def __call__(self, x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
+        self.plot(x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
 
 
     @staticmethod

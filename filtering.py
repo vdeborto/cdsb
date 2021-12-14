@@ -32,11 +32,12 @@ def main(args):
         ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args)
         if t == 0:
             print(ipf.net['b'])
+            print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
         ipf.train()
 
         init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
         init_x_batch, init_y_batch = init_ds.tensors
-        x_ens = ipf.forward_backward_sample(y[t], init_x_batch, init_y_batch, n=args.n_ipf)[-1].detach().cpu()
+        x_ens = ipf.forward_backward_sample(init_x_batch, init_y_batch, y[t], n=args.n_ipf)[-1].detach().cpu()
 
         x_ens_means.append(x_ens.mean(0).numpy())
         x_ens_stds.append(x_ens.std(0).numpy())

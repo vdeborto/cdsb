@@ -6,10 +6,10 @@ from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.two_dim import two_dim_ds
-from ..data.stackedmnist import Stacked_MNIST
+from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
-from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, TwoDPlotter, ImPlotter
+from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
 from .testers import Tester, OneDCondTester, FiveDCondTester
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
@@ -26,8 +26,10 @@ def get_plotter(runner, args):
         return FiveDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     elif dataset_tag == DATASET_BIOCHEMICAL:
         return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
-    elif dataset_tag == DATASET_2D:
-        return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+    # elif dataset_tag == DATASET_2D:
+    #     return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+    elif dataset_tag == DATASET_STACKEDMNIST:
+        return ImPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
         return Plotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
 
@@ -44,18 +46,17 @@ def get_tester(runner, args):
 #--------------------------------------------------------------------------------
 
 MODEL = 'Model'
-BASIC_MODEL = 'Basic'
 BASIC_MODEL_COND = 'BasicCond'
-UNET_MODEL = 'UNET'
+SUPERRES_UNET_MODEL = 'SuperResUNET'
 
 
 def get_models(args):
-    x_dim = args.x_dim
-    y_dim = args.y_dim
-        
     model_tag = getattr(args, MODEL)
 
     if model_tag == BASIC_MODEL_COND:
+        x_dim = args.x_dim
+        y_dim = args.y_dim
+
         kwargs = {
                     "encoder_layers": args.model.encoder_layers,
                     "temb_dim": args.model.temb_dim,
@@ -63,11 +64,8 @@ def get_models(args):
                     "temb_denom": args.model.temb_denom
                 }
         net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs), ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
-    
-    if model_tag == BASIC_MODEL:
-        net_f, net_b = ScoreNetwork(), ScoreNetwork()
 
-    if model_tag == UNET_MODEL:
+    if model_tag == SUPERRES_UNET_MODEL:
         image_size=args.data.image_size
 
         if image_size == 256:
@@ -100,7 +98,7 @@ def get_models(args):
                     "use_scale_shift_norm": args.model.use_scale_shift_norm
                 }
 
-        net_f, net_b = UNetModel(**kwargs), UNetModel(**kwargs)
+        net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)
 
     return net_f, net_b
 
@@ -196,7 +194,7 @@ def get_datasets(args):
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file) 
         load = args.load
-        init_ds = Stacked_MNIST(root, load=load, source_root=root, 
+        init_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
                                 train=True, num_channels = args.data.channels, 
                                 imageSize=args.data.image_size,
                                 device=args.device)
@@ -206,7 +204,7 @@ def get_datasets(args):
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file)
         load = args.load
-        final_ds = Stacked_MNIST(root, load=load, source_root=root,
+        final_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
                                 train=True, num_channels = args.data.channels,
                                 imageSize=args.data.image_size,
                                 device=args.device)

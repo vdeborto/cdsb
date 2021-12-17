@@ -7,7 +7,7 @@ import torchvision.utils as vutils
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from torchvision.utils import save_image
+from .utils import save_image
 
 
 class Stacked_MNIST(Dataset):
@@ -34,30 +34,17 @@ class Stacked_MNIST(Dataset):
             dataloader_G = DataLoader(source_data, batch_size=100, shuffle=True)
             dataloader_B = DataLoader(source_data, batch_size=100, shuffle=True)
 
-            im_dir = root + '/im'
-            if os.path.exists(im_dir):
-                shutil.rmtree(im_dir)                
-            os.makedirs(im_dir)                
-
-            idx = 0
             for (xR, yR), (xG, yG), (xB, yB) in tqdm(zip(dataloader_R, dataloader_G, dataloader_B)):
                 x = torch.cat([xR, xG, xB][-self.num_channels:], dim=1)
                 y = (100 * yR + 10 * yG + yB) % 10**self.num_channels
                 self.data = torch.cat((self.data, x), dim=0)
                 self.targets = torch.cat((self.targets, y), dim=0)
-
-                for k in range(100):
-                    if idx < 10000:
-                        im = x[k]
-                        filename = root + '/im/{:05}.jpg'.format(idx)
-                        save_image(im, filename)
-                    idx += 1 
                     
             if not os.path.isdir(root):
                 os.makedirs(root)
             torch.save(self.data, os.path.join(root, "data.pt"))
             torch.save(self.targets, os.path.join(root, "targets.pt"))
-            vutils.save_image(x, "ali.png", nrow=10)
+            save_image(x, os.path.join(root, "data_x.png"), nrow=10)
             
         self.data = self.data#.to(device)
         self.targets = self.targets#.to(device)
@@ -80,12 +67,14 @@ class Cond_Stacked_MNIST(Stacked_MNIST):
             downsample_kernel = torch.ones(num_channels, 1, factor, factor)
             downsample_kernel = downsample_kernel / factor ** 2
 
-            self.y_data = torch.nn.functional.conv2d(self.data, downsample_kernel, stride=factor,
+            self.data_y = torch.nn.functional.conv2d(self.data, downsample_kernel, stride=factor,
                                                      groups=num_channels)
+
+            save_image(self.data_y[-100:], os.path.join(root, "data_y.png"), nrow=10)
         else:
             raise NotImplementedError
 
     def __getitem__(self, index):
-        img, targets = self.data[index], self.y_data[index]
+        img, targets = self.data[index], self.data_y[index]
 
         return img, targets

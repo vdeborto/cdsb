@@ -330,13 +330,11 @@ class IPFBase(torch.nn.Module):
                         init_batch_x = init_batch[0].to(self.device)
                         init_batch_y = batch_y                                       
                         
-                    x_tot, y_tot, out, steps_expanded = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
+                    x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
 
                     shape_len = len(x_tot.shape)
                     x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
                     x_tot_plot = x_tot.detach()#.cpu().numpy()
-                    y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
-                    y_tot_plot = y_tot.detach()#.cpu().numpy()
 
                     x_tot_cond = torch.zeros([0, *x_tot.shape])
                     x_tot_cond_fwdbwd = torch.zeros([0, *x_tot.shape])
@@ -496,12 +494,10 @@ class IPFSequential(IPFBase):
                 batch = next(self.save_init_dl)
                 batch_x = batch[0].to(self.device)
                 batch_y = batch[1].to(self.device) 
-                x_tot, y_tot, _, _ = self.langevin.record_init_langevin(batch_x, batch_y)
+                x_tot, _, _, _ = self.langevin.record_init_langevin(batch_x, batch_y)
                 shape_len = len(x_tot.shape)
                 x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
                 x_tot_plot = x_tot.detach()#.cpu().numpy()
-                y_tot = y_tot.permute(1, 0, *list(range(2, shape_len)))
-                y_tot_plot = y_tot.detach()#.cpu().numpy()
                 
                 test_metrics = self.tester(
                     batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],

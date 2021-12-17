@@ -36,8 +36,8 @@ def main(args):
         ipf.train()
 
         init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
-        init_x_batch, init_y_batch = init_ds.tensors
-        x_ens = ipf.forward_backward_sample(init_x_batch, init_y_batch, y[t], n=args.n_ipf)[-1].detach().cpu()
+        init_x, init_y = init_ds.tensors
+        x_ens = ipf.forward_backward_sample(init_x, init_y, y[t], n=args.n_ipf)[-1].detach().cpu()
 
         x_ens_means.append(x_ens.mean(0).numpy())
         x_ens_stds.append(x_ens.std(0).numpy())

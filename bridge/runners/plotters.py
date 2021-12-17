@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 import torchvision.utils as vutils
+from ..data.utils import save_image
 from PIL import Image
 import os, sys
 matplotlib.use('Agg')
@@ -90,6 +91,7 @@ class Plotter(object):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         pass
 
+
 class ImPlotter(Plotter):
 
     def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif', plot_level=3):
@@ -115,11 +117,11 @@ class ImPlotter(Plotter):
             if self.plot_level > 0:
                 plt.clf()
                 filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
-                vutils.save_image(x_start, filename_grid_png, nrow=10)
+                save_image(x_start, filename_grid_png, nrow=10)
                 filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
-                vutils.save_image(x_tot[-1], filename_grid_png, nrow=10)
+                save_image(x_tot[-1], filename_grid_png, nrow=10)
                 filename_grid_png = os.path.join(im_dir, 'im_grid_data.png')
-                vutils.save_image(x_init, filename_grid_png, nrow=10)
+                save_image(x_init, filename_grid_png, nrow=10)
 
             if self.plot_level >= 2:
                 plt.clf()
@@ -130,7 +132,7 @@ class ImPlotter(Plotter):
                         # save png
                         filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))
                         plot_paths.append(filename_grid_png)
-                        vutils.save_image(x_tot[k], filename_grid_png, nrow=10)
+                        save_image(x_tot[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
 
@@ -203,6 +205,7 @@ class OneDCondPlotter(Plotter):
         x_tot = x_tot.cpu().numpy()
 
         if n == 0 and fb == "f":
+            plt.clf()
             filename = 'original_density.png'
             filename = os.path.join(self.im_dir, filename)
             k = kde.gaussian_kde([y_start[:,0], x_start[:,0]])

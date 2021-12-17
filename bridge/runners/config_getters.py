@@ -28,7 +28,7 @@ def get_plotter(runner, args):
         return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     # elif dataset_tag == DATASET_2D:
     #     return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
-    elif dataset_tag == DATASET_STACKEDMNIST:
+    elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA]:
         return ImPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
     else:
         return Plotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
@@ -178,8 +178,10 @@ def get_datasets(args):
 
     if dataset_tag == DATASET_CELEBA:
 
-        train_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size), transforms.ToTensor()]
-        test_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size), transforms.ToTensor()]
+        train_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size),
+                           transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        test_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size),
+                          transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         if args.data.random_flip:
             train_transform.insert(2, transforms.RandomHorizontalFlip())
 

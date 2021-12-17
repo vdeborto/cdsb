@@ -8,6 +8,7 @@ data:
   image_size: 64
   channels: 3
   random_flip: true
+y_cond: null
 
 # transfer
 transfer: False
@@ -17,7 +18,7 @@ Dataset_transfer: mnist
 final_adaptive: False
 adaptive_mean: True
 mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
-var_final: .5 * torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
+var_final: 1 * torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
 load: False
 
 # device
@@ -30,6 +31,7 @@ pin_memory: False
 log_stride : 10
 gif_stride: 5000
 plot_npar: 100
+test_npar: 100
 
 # training
 cache_npar: 300

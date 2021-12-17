@@ -42,22 +42,21 @@ class Langevin(torch.nn.Module):
         self.time_sampler = time_sampler
             
 
-    def record_init_langevin(self, init_samples_x, init_samples_y):
-        mean_final = self.mean_final
-        var_final = self.var_final        
+    def record_init_langevin(self, init_samples_x, init_samples_y, mean_final=None, var_final=None):
+        if mean_final is None:
+            mean_final = self.mean_final
+        if var_final is None:
+            var_final = self.var_final
         
         x = init_samples_x
         y = init_samples_y
         N = x.shape[0]
         steps = self.steps.reshape((1,self.num_steps,1)).repeat((N,1,1))
-        time = self.time.reshape((1,self.num_steps,1)).repeat((N,1,1))
-        gammas = self.gammas.reshape((1,self.num_steps,1)).repeat((N,1,1))
 
 
         x_tot = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
         y_tot = torch.Tensor(N, self.num_steps, *self.d_y).to(x.device)
         out = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
-        store_steps = self.steps
         num_iter = self.num_steps
         steps_expanded = steps
         
@@ -75,22 +74,16 @@ class Langevin(torch.nn.Module):
             
         return x_tot, y_tot, out, steps_expanded
 
-    def record_langevin_seq(self, net, init_samples_x, init_samples_y, t_batch=None, sample=False):
-        mean_final = self.mean_final
-        var_final = self.var_final        
-    
+    def record_langevin_seq(self, net, init_samples_x, init_samples_y, sample=False):
         x = init_samples_x
         y = init_samples_y
         N = x.shape[0]
         steps = self.steps.reshape((1,self.num_steps,1)).repeat((N,1,1))
-        time = self.time.reshape((1,self.num_steps,1)).repeat((N,1,1))
-        gammas = self.gammas.reshape((1,self.num_steps,1)).repeat((N,1,1))
 
         
         x_tot = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
         y_tot = torch.Tensor(N, self.num_steps, *self.d_y).to(x.device)
         out = torch.Tensor(N, self.num_steps, *self.d_x).to(x.device)
-        store_steps = self.steps
         steps_expanded = steps
         num_iter = self.num_steps
         
@@ -127,11 +120,3 @@ class Langevin(torch.nn.Module):
             
 
         return x_tot, y_tot, out, steps_expanded
-
-
-    def forward(self, net, init_samples_x, init_samples_y, t_batch):
-        return self.record_langevin_seq(net, init_samples_x, init_samples_y, t_batch)
-    
-
-
-

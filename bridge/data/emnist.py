@@ -7,7 +7,6 @@ import torchvision.utils as vutils
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from torchvision.utils import save_image
 
 
 class EMNIST(Dataset):

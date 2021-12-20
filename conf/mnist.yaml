@@ -15,7 +15,7 @@ LOGGER: CSV # NEPTUNE, CSV, NONE
 CSV_log_dir: ./
 
 # training
-cache_gpu: False
+cache_cpu: True
 num_cache_batches: 10
 cache_refresh_stride: 1000
 plot_level: 1

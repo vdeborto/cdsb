@@ -19,17 +19,20 @@ import time
 
 class IPFBase(torch.nn.Module):
 
-    def __init__(self, init_ds, final_ds, mean_final, var_final, args):
+    def __init__(self, init_ds, final_ds, mean_final, var_final, args, final_cond_model=None):
         super().__init__()
+        self.accelerator = Accelerator(fp16=False, cpu=args.device=='cpu')
+        self.device = self.accelerator.device
+
+        self.args = args
+
         self.init_ds = init_ds
         self.final_ds = final_ds
         self.mean_final = mean_final
         self.var_final = var_final
-        self.args = args
-        
-        #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.accelerator = Accelerator(fp16=False, cpu=args.device=='cpu')
-        self.device = self.accelerator.device # torch.device(args.device)
+        self.std_final = torch.sqrt(self.var_final)
+
+        self.transfer = self.args.transfer
 
         # training params
         self.n_ipf =self.args.n_ipf
@@ -116,6 +119,11 @@ class IPFBase(torch.nn.Module):
 
                 self.y_cond = torch.stack(self.y_cond, dim=0)
 
+        self.cond_final = self.args.cond_final
+        assert (not self.transfer or not self.cond_final)
+        if self.cond_final:
+            self.final_cond_model = final_cond_model
+            self.final_cond_model = self.accelerator.prepare(self.final_cond_model)
 
     def get_logger(self, name='logs'):
         return get_logger(self.args, name)
@@ -151,19 +159,14 @@ class IPFBase(torch.nn.Module):
             net_b = net_b.to(self.device)
             self.net.update({'b': net_b})
 
-        
-
     def accelerate(self, forward_or_backward):
         (self.net[forward_or_backward], self.optimizer[forward_or_backward]) = self.accelerator.prepare(self.net[forward_or_backward], self.optimizer[forward_or_backward])
-
 
     def update_ema(self, forward_or_backward):
         if self.args.ema:
             self.ema_helpers[forward_or_backward] = EMAHelper(mu=self.args.ema_rate, device=self.device)
             self.ema_helpers[forward_or_backward].register(self.net[forward_or_backward])
 
-
-        
     def build_ema(self):
         if self.args.ema:
             self.ema_helpers={}                
@@ -194,11 +197,7 @@ class IPFBase(torch.nn.Module):
         self.optimizer = {'f': optimizer_f, 'b':optimizer_b}
 
     def build_dataloaders(self):
-        self.mean_final = self.mean_final.to(self.device)
-        self.var_final = self.var_final.to(self.device)
-        self.std_final = torch.sqrt(self.var_final).to(self.device)
-        
-        def worker_init_fn(worker_id):                                                          
+        def worker_init_fn(worker_id):
             np.random.seed(np.random.get_state()[1][0] + worker_id + self.accelerator.process_index)
 
         self.kwargs = {"num_workers": self.args.num_workers, 
@@ -216,8 +215,7 @@ class IPFBase(torch.nn.Module):
         self.cache_init_dl = repeater(self.cache_init_dl)
         self.save_init_dl = repeater(self.save_init_dl)
 
-
-        if self.args.transfer:
+        if self.transfer:
             self.save_final_dl = DataLoader(self.final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
             self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
             (self.cache_final_dl, self.save_final_dl) = self.accelerator.prepare(self.cache_final_dl, self.save_final_dl)
@@ -225,7 +223,7 @@ class IPFBase(torch.nn.Module):
             self.save_final_dl = repeater(self.save_final_dl)
         else:
             self.cache_final_dl = None
-            self.save_final = None
+            self.save_final_dl = None
 
         batch = next(self.save_init_dl)
         batch_x = batch[0]
@@ -239,9 +237,8 @@ class IPFBase(torch.nn.Module):
                                  self.time_sampler, device = self.device,
                                  mean_final=self.mean_final, var_final=self.var_final,
                                  mean_match=self.args.mean_match)
-        
+
     def new_cacheloader(self, forward_or_backward, n, use_ema=True):
-        
         sample_direction = 'f' if forward_or_backward == 'b' else 'b'
         if use_ema:
             sample_net = self.ema_helpers[sample_direction].ema_copy(self.net[sample_direction])
@@ -250,35 +247,25 @@ class IPFBase(torch.nn.Module):
         
         if forward_or_backward == 'b':
             sample_net = self.accelerator.prepare(sample_net)
-            new_dl = CacheLoader('b',
-                                sample_net, 
-                                self.cache_init_dl, 
-                                self.args.num_cache_batches, 
-                                self.langevin, n, 
-                                mean = None,
-                                std = None,
-                                batch_size=self.cache_npar,
-                                device=self.device,
-                                dataloader_f=self.cache_final_dl,
-                                transfer=self.args.transfer)
-            
-        else: # forward
-            sample_net = self.accelerator.prepare(sample_net)
-            new_dl = CacheLoader('f',
-                            sample_net, 
-                            self.cache_init_dl, 
-                            self.args.num_cache_batches, 
-                            self.langevin, n, 
-                            mean = self.mean_final,
-                            std = self.std_final,
-                            batch_size = self.cache_npar,
-                            device=self.device,
-                            dataloader_f=self.cache_final_dl,
-                            transfer=self.args.transfer)
-                                 
+            new_ds = CacheLoader('b',
+                                 sample_net,
+                                 self.cache_init_dl,
+                                 self.cache_final_dl,
+                                 self.args.num_cache_batches,
+                                 self.langevin, self, n,
+                                 device='cpu' if self.args.cache_cpu else self.device)
 
-            
-        new_dl = DataLoader(new_dl, batch_size=self.batch_size)
+        else:  # forward
+            sample_net = self.accelerator.prepare(sample_net)
+            new_ds = CacheLoader('f',
+                                 sample_net,
+                                 self.cache_init_dl,
+                                 self.cache_final_dl,
+                                 self.args.num_cache_batches,
+                                 self.langevin, self, n,
+                                 device='cpu' if self.args.cache_cpu else self.device)
+
+        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         new_dl = self.accelerator.prepare(new_dl)
         new_dl = repeater(new_dl)
@@ -315,21 +302,9 @@ class IPFBase(torch.nn.Module):
 
                 with torch.no_grad():
                     self.set_seed(seed=0 + self.accelerator.process_index)
-                    if fb == 'f':
-                        batch = next(self.save_init_dl)
-                        batch_x = batch[0].to(self.device)
-                        batch_y = batch[1].to(self.device)
-                        init_batch_x = batch_x
-                    elif self.args.transfer:
-                        batch = next(self.save_final_dl)[0]
-                        batch = batch.to(self.device)
-                    else:
-                        batch_x = self.mean_final + self.std_final*torch.randn((self.save_npar, *self.shape_x), device=self.device)
-                        init_batch = next(self.save_init_dl)
-                        batch_y = init_batch[1].to(self.device)
-                        init_batch_x = init_batch[0].to(self.device)
-                        init_batch_y = batch_y                                       
-                        
+                    batch_x, batch_y, init_batch_x, _, _ = self.sample_batch(self.save_init_dl, self.save_final_dl, fb)
+                    init_batch_y = batch_y
+
                     x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
 
                     shape_len = len(x_tot.shape)
@@ -339,9 +314,9 @@ class IPFBase(torch.nn.Module):
                     x_tot_cond = torch.zeros([0, *x_tot.shape])
                     x_tot_cond_fwdbwd = torch.zeros([0, *x_tot.shape])
 
-                    if self.y_cond is not None and not self.args.transfer and fb == 'b':
+                    if self.y_cond is not None and not self.cond_final and fb == 'b':
                         for k in range(len(self.y_cond)):
-                            x_tot_c = self.backward_sample(self.y_cond[k], final_batch_x=batch_x)
+                            x_tot_c = self.backward_sample(batch_x, self.y_cond[k])
                             x_tot_cond = torch.cat([x_tot_cond, x_tot_c.cpu().unsqueeze(0)], dim=0)
 
                             x_tot_fwd, x_tot_c_fwdbwd = self.forward_backward_sample(init_batch_x, init_batch_y, self.y_cond[k], n,
@@ -361,13 +336,54 @@ class IPFBase(torch.nn.Module):
                 self.plotter(batch_x[:self.args.plot_npar], batch_y[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar],
                              self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], init_batch_x[:self.args.plot_npar],
                              self.args.data, i, n, fb)
-                if self.y_cond is not None and not self.args.transfer and fb == 'b':
+                if self.y_cond is not None and not self.cond_final and fb == 'b':
                     self.plotter.plot_sequence_cond_fwdbwd(init_batch_x[:self.args.plot_npar], init_batch_y[:self.args.plot_npar],
                                                            x_tot_fwd[:, :self.args.plot_npar],
                                                            self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar],
                                                            self.args.data, i, n, fb)
 
-    def backward_sample(self, y_c, num_samples=None, final_batch_x=None, fix_seed=False):
+    def sample_batch(self, init_dl, final_dl, fb):
+        mean_final = self.mean_final
+        std_final = self.std_final
+
+        if fb == 'f':
+            batch = next(init_dl)
+            batch_x = batch[0]
+            batch_y = batch[1]
+            init_batch_x = batch_x
+        elif self.transfer:
+            batch = next(final_dl)
+            batch_x = batch[0]
+            init_batch = next(init_dl)
+            batch_y = init_batch[1]
+            init_batch_x = init_batch[0]
+        elif self.cond_final:
+            self.final_cond_model.eval()
+            init_batch = next(init_dl)
+            init_batch_x = init_batch[0]
+            batch_y = init_batch[1]
+            mean, std = self.final_cond_model(batch_y)
+            batch_x = mean + std * torch.randn_like(init_batch_x)
+
+            if self.args.final_adaptive:
+                mean_final = mean
+                std_final = std
+            elif self.args.adaptive_mean:
+                mean_final = mean
+        else:
+            init_batch = next(init_dl)
+            init_batch_x = init_batch[0]
+            batch_y = init_batch[1]
+            mean_final = mean_final.to(init_batch_x.device)
+            std_final = std_final.to(init_batch_x.device)
+            batch_x = mean_final + std_final * torch.randn_like(init_batch_x)
+
+        mean_final = mean_final.to(init_batch_x.device)
+        std_final = std_final.to(init_batch_x.device)
+        var_final = std_final ** 2
+        return batch_x, batch_y, init_batch_x, mean_final, var_final
+
+    def backward_sample(self, final_batch_x, y_c, fix_seed=False):
         if self.accelerator.is_main_process:
             if self.args.ema:
                 sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
@@ -376,11 +392,6 @@ class IPFBase(torch.nn.Module):
 
             with torch.no_grad():
                 # self.set_seed(seed=0 + self.accelerator.process_index)
-                if final_batch_x is not None:
-                    final_batch_x = final_batch_x.to(self.device)
-                else:
-                    final_batch_x = self.mean_final + self.std_final * torch.randn((num_samples, *self.shape_x),
-                                                                                   device=self.device)
                 y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
                 x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True)
 
@@ -412,8 +423,8 @@ class IPFBase(torch.nn.Module):
         x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fix_seed=fix_seed)
         final_batch_x = x_tot[-1]
         if return_fwd_tot:
-            return x_tot, self.backward_sample(y_c, final_batch_x=final_batch_x, fix_seed=fix_seed)
-        return self.backward_sample(y_c, final_batch_x=final_batch_x, fix_seed=fix_seed)
+            return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed)
+        return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed)
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
@@ -452,8 +463,7 @@ class IPFSequential(IPFBase):
                 pred = self.net[forward_or_backward](x, y, eval_steps) 
 
             loss = F.mse_loss(pred, out)
-            
-            #loss.backward()
+
             self.accelerator.backward(loss)
                 
 
@@ -465,9 +475,9 @@ class IPFSequential(IPFBase):
 
 
             if i % self.stride_log == 0:
-                self.logger.log_metrics({'forward_or_backward':forward_or_backward,
+                self.logger.log_metrics({'forward_or_backward': forward_or_backward,
                                          'loss': loss, 
-                                         'grad_norm' : total_norm}, step=i+self.num_iter*(n-1))
+                                         'grad_norm': total_norm}, step=i+self.num_iter*(n-1))
             
             self.optimizer[forward_or_backward].step()
             self.optimizer[forward_or_backward].zero_grad()
@@ -484,17 +494,15 @@ class IPFSequential(IPFBase):
         
         new_dl = None
         self.clear()
-        
 
     def train(self):
         # INITIAL FORWARD PASS
         if self.accelerator.is_main_process:
             with torch.no_grad():
                 self.set_seed(seed=0 + self.accelerator.process_index)
-                batch = next(self.save_init_dl)
-                batch_x = batch[0].to(self.device)
-                batch_y = batch[1].to(self.device) 
-                x_tot, _, _, _ = self.langevin.record_init_langevin(batch_x, batch_y)
+                batch_x, batch_y, _, mean_final, var_final = self.sample_batch(self.save_init_dl, None, "f")
+                x_tot, _, _, _ = self.langevin.record_init_langevin(batch_x, batch_y,
+                                                                    mean_final=mean_final, var_final=var_final)
                 shape_len = len(x_tot.shape)
                 x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
                 x_tot_plot = x_tot.detach()#.cpu().numpy()

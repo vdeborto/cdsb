@@ -16,6 +16,8 @@ y_cond:
 transfer: False
 Dataset_transfer: 2d
 data_transfer: circle
+cond_final: False
+
 
 adaptive_mean: False
 final_adaptive: False

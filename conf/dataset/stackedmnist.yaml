@@ -16,13 +16,14 @@ factor: 4
 # transfer
 transfer: False
 Dataset_transfer: mnist
+cond_final: False
 
 
+adaptive_mean: False
 final_adaptive: False
-adaptive_mean: True
 mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
 var_final: 1 * torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
-load: False
+load: True
 
 # device
 device: cuda

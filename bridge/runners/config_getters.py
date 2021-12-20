@@ -124,11 +124,7 @@ DATASET_EMNIST = 'emnist'
 
 def get_datasets(args):
     dataset_tag = getattr(args, DATASET)
-    if args.transfer:
-        dataset_transfer_tag = getattr(args, DATASET_TRANSFER)
-    else:
-        dataset_transfer_tag = None
-    
+
     # INITIAL (DATA) DATASET
 
     data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
@@ -167,13 +163,6 @@ def get_datasets(args):
         npar = args.npar
         init_ds = two_dim_ds(npar, data_tag)
 
-    if dataset_transfer_tag == DATASET_2D:
-        data_tag = args.data_transfer
-        npar = args.npar
-        final_ds = two_dim_ds(npar, data_tag)
-        mean_final = torch.tensor(0.)
-        var_final = torch.tensor(1.*10**3) #infty like
-
     # CELEBA DATASET
 
     if dataset_tag == DATASET_CELEBA:
@@ -191,7 +180,7 @@ def get_datasets(args):
 
     # MNIST DATASET
 
-    if dataset_tag ==  DATASET_STACKEDMNIST:
+    if dataset_tag == DATASET_STACKEDMNIST:
         root = os.path.join(data_dir, 'mnist')
         saved_file = os.path.join(root, "data.pt")
         load = os.path.exists(saved_file) 
@@ -200,18 +189,6 @@ def get_datasets(args):
                                 train=True, num_channels = args.data.channels, 
                                 imageSize=args.data.image_size,
                                 device=args.device)
-
-    if dataset_transfer_tag == DATASET_STACKEDMNIST:
-        root = os.path.join(data_dir, 'mnist')
-        saved_file = os.path.join(root, "data.pt")
-        load = os.path.exists(saved_file)
-        load = args.load
-        final_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
-                                train=True, num_channels = args.data.channels,
-                                imageSize=args.data.image_size,
-                                device=args.device)
-        mean_final = torch.tensor(0.)
-        var_final = torch.tensor(1.*10**3)
 
     # EMNIST DATASET
 
@@ -225,41 +202,9 @@ def get_datasets(args):
                                 imageSize=args.data.image_size,
                                 device=args.device)
 
-    if dataset_transfer_tag == DATASET_EMNIST:
-        root = os.path.join(data_dir, 'EMNIST')
-        saved_file = os.path.join(root, "data.pt")
-        load = os.path.exists(saved_file)
-        load = args.load
-        final_ds = EMNIST(root, load=load, source_root=root,
-                                train=True, num_channels = args.data.channels,
-                                imageSize=args.data.image_size,
-                                device=args.device)
-        mean_final = torch.tensor(0.)
-        var_final = torch.tensor(1.*10**3)
-
-
     # FINAL (GAUSSIAN) DATASET (if no transfer)
 
-    if not(args.transfer):
-        if args.adaptive_mean:
-            NAPPROX = 100
-            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
-            mean_final = vec.mean()
-            mean_final = vec[0] * 0 + mean_final
-            var_final = eval(args.var_final)
-            final_ds = None
-        elif args.final_adaptive:
-            NAPPROX = 100
-            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
-            mean_final = vec.mean(axis=0)
-            var_final = vec.var()
-            final_ds = None
-        else:
-            mean_final = eval(args.mean_final)
-            var_final = eval(args.var_final)
-            final_ds = None
-        
-
+    final_ds, mean_final, var_final = get_final_dataset(args, init_ds)
     return init_ds, final_ds, mean_final, var_final
 
 
@@ -305,6 +250,64 @@ def get_filtering_datasets(x_tm1, args):
             final_ds = None
 
     return init_ds, final_ds, mean_final, var_final
+
+
+def get_final_dataset(args, init_ds):
+    dataset_tag = getattr(args, DATASET)
+    if args.transfer:
+        dataset_transfer_tag = getattr(args, DATASET_TRANSFER)
+    else:
+        dataset_transfer_tag = None
+
+    data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
+
+    # if dataset_transfer_tag == DATASET_STACKEDMNIST:
+    #     root = os.path.join(data_dir, 'mnist')
+    #     saved_file = os.path.join(root, "data.pt")
+    #     load = os.path.exists(saved_file)
+    #     load = args.load
+    #     final_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
+    #                                   train=True, num_channels=args.data.channels,
+    #                                   imageSize=args.data.image_size,
+    #                                   device=args.device)
+    #     mean_final = torch.tensor(0.)
+    #     var_final = torch.tensor(1. * 10 ** 3)
+    #
+    # # EMNIST DATASET
+    #
+    # if dataset_transfer_tag == DATASET_EMNIST:
+    #     root = os.path.join(data_dir, 'EMNIST')
+    #     saved_file = os.path.join(root, "data.pt")
+    #     load = os.path.exists(saved_file)
+    #     load = args.load
+    #     final_ds = EMNIST(root, load=load, source_root=root,
+    #                       train=True, num_channels=args.data.channels,
+    #                       imageSize=args.data.image_size,
+    #                       device=args.device)
+    #     mean_final = torch.tensor(0.)
+    #     var_final = torch.tensor(1. * 10 ** 3)
+
+
+    # FINAL (GAUSSIAN) DATASET (if no transfer)
+    NAPPROX = 1000
+    if not args.transfer:
+        if args.adaptive_mean:
+            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
+            mean_final = vec.mean(axis=0)
+            mean_final = vec[0] * 0 + mean_final
+            var_final = eval(args.var_final)
+            final_ds = None
+        elif args.final_adaptive:
+            vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX)))[0]
+            mean_final = vec.mean(axis=0)
+            var_final = vec.var()
+            final_ds = None
+        else:
+            mean_final = eval(args.mean_final)
+            var_final = eval(args.var_final)
+            final_ds = None
+
+    return final_ds, mean_final, var_final
 
 
 # Logger

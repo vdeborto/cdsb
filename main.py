@@ -1,6 +1,6 @@
 import torch
 import hydra
-import os,sys
+import os, sys
 
 sys.path.append('..')
 
@@ -19,8 +19,9 @@ def main(args):
     init_ds, final_ds, mean_final, var_final = get_datasets(args)
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args)
-    print(ipf.net['b'])
-    print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
+    ipf.accelerator.print(ipf.accelerator.state)
+    ipf.accelerator.print(ipf.net['b'])
+    ipf.accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
     ipf.train()
     
 

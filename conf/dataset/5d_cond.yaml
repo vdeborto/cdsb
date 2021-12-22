@@ -6,7 +6,8 @@ x_dim: 1
 y_dim: 5
 
 # conditioning
-data: type1
+data:
+  dataset: type1
 y_cond: 
   - torch.randn(5)
   - torch.randn(5)

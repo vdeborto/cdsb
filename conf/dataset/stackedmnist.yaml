@@ -47,7 +47,7 @@ grad_clipping: True
 grad_clip: 1.0
 n_ipf_init: 1
 batch_size: 128
-num_iter : 500000
+num_iter: 5000
 n_ipf: 20
 lr: 0.0001
 

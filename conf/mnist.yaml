@@ -8,7 +8,8 @@ defaults:
   - model: SuperResUNET #Basic, UNET
   - override hydra/launcher: submitit_slurm
 
-name: "mnist"
+name: ${Dataset}_${data.dataset}
+nosave: False
 
 # logging
 LOGGER: CSV # NEPTUNE, CSV, NONE

@@ -1,0 +1,24 @@
+import torch
+
+def sample_cov(x, y=None, w=None):
+    if w is None:
+        w = 1 / x.shape[-2] * torch.ones((x.shape[-2], 1)).to(x.device)
+    else:
+        w = w.view(*x.shape[:-1], 1)
+    x_centred = x - (x * w).sum(-2, keepdim=True)
+    if y is None:
+        y_centred = x_centred
+    else:
+        y_centred = y - (y * w).sum(-2, keepdim=True)
+    cov = (w * x_centred).transpose(-2, -1) @ y_centred / (1 - (w**2).sum(-2, keepdim=True))  # (batch, xdim, ydim)
+    return cov
+
+
+if __name__ == '__main__':
+    test = torch.randn(100, 5)
+    assert torch.allclose(torch.cov(test.t()), sample_cov(test))
+
+    test_1 = torch.randn(100, 5)
+    test_2 = torch.randn(100, 3)
+    test = torch.cat([test_1, test_2], 1)
+    assert torch.allclose(torch.cov(test.t())[:5, 5:], sample_cov(test_1, test_2))

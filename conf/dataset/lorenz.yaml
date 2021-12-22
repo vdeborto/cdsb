@@ -1,6 +1,7 @@
 # @package _global_
 
 Dataset: lorenz
+nosave: True
 
 x_dim: 3
 y_dim: 3
@@ -8,20 +9,20 @@ y_dim: 3
 ens_size: 1000
 
 # conditioning
-data: type1
+data:
+  dataset: type1
+
 y_cond: null
 
 # transfer
 transfer: False
-Dataset_transfer: 2d
-data_transfer: circle
 cond_final: False
 
 
 adaptive_mean: False
 final_adaptive: True
-mean_final: torch.tensor([0.])
-var_final: 1.*torch.tensor([1.])
+mean_final: torch.zeros(${x_dim})
+var_final: 1.*torch.ones(${x_dim})
 
 
 # device
@@ -40,15 +41,15 @@ grad_clipping: False
 grad_clip: 1.0
 npar: 50000
 batch_size: 512
-num_iter: 10000
+num_iter: 5000
 cache_npar: 10000
-n_ipf: 1
+n_ipf: 5
 lr: 0.0001
 
 # schedule
 num_steps: 20
-gamma_max: 0.1
-gamma_min: 0.1
+gamma_max: 0.01
+gamma_min: 0.01
 gamma_space: linspace
 weight_distrib: False
 weight_distrib_alpha: 100

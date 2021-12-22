@@ -8,8 +8,8 @@ defaults:
   - model: BasicCond #Basic, UNET
   - override hydra/launcher: submitit_slurm
 
-name: "1d_cond"
-
+name: ${Dataset}_${data.dataset}
+nosave: False
 
 # logging
 LOGGER: CSV # NEPTUNE, CSV, NONE

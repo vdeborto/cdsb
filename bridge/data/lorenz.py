@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import TensorDataset
+from torch.distributions import Normal, Independent
 from scipy.integrate import solve_ivp, odeint
 import os
 
@@ -29,11 +30,18 @@ def RK45_step(f, t, x, h):
 
 
 def forward_sim(x_0, data):
+    F_fn, G_fn = forward_dist_fn(data)
+    x = F_fn(x_0, None).sample()
+    y = G_fn(x, None).sample()
+    return x, y
+
+
+def forward_dist_fn(data):
     if data == 'type1':
         rho = 28.0
         sigma = 10.0
         beta = 8.0 / 3.0
-        dt = 0.01
+        dt = 0.1
         y_std = 2
 
         def f(t, state):
@@ -42,10 +50,10 @@ def forward_sim(x_0, data):
             f2 = state[..., 0] * state[..., 1] - beta * state[..., 2]
             return torch.stack([f0, f1, f2], -1)
 
-        x = RK45_step(f, 0, x_0, dt)
-        y = x + torch.randn(*x.shape) * y_std
+        F_fn = lambda x, t: Independent(Normal(RK45_step(f, 0, x, dt), 0., validate_args=False), 1)
+        G_fn = lambda x, t: Independent(Normal(x, y_std * torch.ones_like(x)), 1)
 
-    return x, y
+    return F_fn, G_fn
 
 
 def data_distrib(data):

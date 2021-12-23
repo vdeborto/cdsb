@@ -1,8 +1,11 @@
+import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 from torch.distributions import Normal, Independent
 from scipy.integrate import solve_ivp, odeint
 import os
+from tqdm import tqdm
+from bridge.models.cond import BootstrapParticleFilter
 
 
 def RK4_step(f, t, x, h):
@@ -79,7 +82,35 @@ def lorenz_process(root, data_tag):
         x, y = data_distrib(data_tag)
         torch.save([x, y], data_path)
         print("Created new dataset lorenz", data_tag)
-    return x, y
+
+    gt_filter_path = os.path.join(root, data_tag, "gt_filter.pt")
+    if os.path.isfile(gt_filter_path):
+        gt_means, gt_stds = torch.load(gt_filter_path)
+    else:
+        T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
+        x_0_mean = torch.ones([xdim])
+        x_0_std = torch.ones([xdim])
+
+        # BPF
+        gt_means = torch.zeros([0, xdim])
+        gt_stds = torch.zeros([0, xdim])
+
+        p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
+        F_fn, G_fn = forward_dist_fn(data_tag)
+        BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 1000)
+
+        for t in tqdm(range(T)):
+            BPF.advance_timestep(y[t])
+            BPF.update(y[t])
+
+            gt_mean, gt_cov = BPF.return_summary_stats()
+            gt_std = torch.diagonal(gt_cov).sqrt()
+
+            gt_means = torch.vstack([gt_means, gt_mean])
+            gt_stds = torch.vstack([gt_stds, gt_std])
+
+        torch.save([gt_means, gt_stds], gt_filter_path)
+    return x, y, gt_means, gt_stds
 
 
 def lorenz_ds(x_0, data_tag):

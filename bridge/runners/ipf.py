@@ -327,7 +327,7 @@ class IPFBase(torch.nn.Module):
                                 x_tot_c = self.backward_sample(batch_x, self.y_cond[k])
                                 x_tot_cond = torch.cat([x_tot_cond, x_tot_c.cpu().unsqueeze(0)], dim=0)
 
-                                x_tot_fwd, x_tot_c_fwdbwd = self.forward_backward_sample(init_batch_x, init_batch_y, self.y_cond[k], n,
+                                x_tot_fwd, x_tot_c_fwdbwd = self.forward_backward_sample(init_batch_x, init_batch_y, self.y_cond[k],
                                                                                          return_fwd_tot=True)
                                 x_tot_cond_fwdbwd = torch.cat([x_tot_cond_fwdbwd, x_tot_c_fwdbwd.cpu().unsqueeze(0)], dim=0)
 
@@ -419,7 +419,7 @@ class IPFBase(torch.nn.Module):
 
         return x_tot_c
 
-    def forward_sample(self, init_batch_x, init_batch_y, n, fix_seed=False):
+    def forward_sample(self, init_batch_x, init_batch_y,  fix_seed=False):
         if self.accelerator.is_main_process:
             if self.args.ema:
                 sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
@@ -430,23 +430,16 @@ class IPFBase(torch.nn.Module):
                 # self.set_seed(seed=0 + self.accelerator.process_index)
                 init_batch_x = init_batch_x.to(self.device)
                 init_batch_y = init_batch_y.to(self.device)
-                if n == 1:
-                    assert not self.cond_final
-                    mean_final = self.mean_final.to(self.device)
-                    var_final = self.var_final.to(self.device)
 
-                    x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y,
-                                                                        mean_final=mean_final, var_final=var_final)
-                else:
-                    x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
 
             x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
 
         return x_tot
 
-    def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fix_seed=False, return_fwd_tot=False):
+    def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, fix_seed=False, return_fwd_tot=False):
         if self.accelerator.is_main_process:
-            x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fix_seed=fix_seed)
+            x_tot = self.forward_sample(init_batch_x, init_batch_y, fix_seed=fix_seed)
             final_batch_x = x_tot[-1]
             if return_fwd_tot:
                 return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed)

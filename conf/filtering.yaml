@@ -2,9 +2,11 @@
 
 defaults:
   - _self_
+  - launcher: slurm_cpu
   - job
   - dataset: lorenz #celeba, 2d, stackedmnist
   - model: BasicCond #Basic, UNET
+  - override hydra/launcher: submitit_slurm
 
 name: ${Dataset}_${data.dataset}
 nosave: False
@@ -26,9 +28,3 @@ paths:
 
 # checkpoint
 checkpoint_run: False
-checkpoint_it: 13
-checkpoint_pass: b  # b or f (skip b ipf run)
-sample_checkpoint_f: ""
-sample_checkpoint_b: ""
-checkpoint_f: ""
-checkpoint_b: ""

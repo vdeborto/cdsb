@@ -266,9 +266,9 @@ def get_filtering_process(args):
     if dataset_tag == DATASET_LORENZ:
         data_tag = args.data.dataset
         root = os.path.join(data_dir, 'lorenz')
-        x, y = lorenz_process(root, data_tag)
+        x, y, gt_means, gt_stds = lorenz_process(root, data_tag)
 
-    return x, y
+    return x, y, gt_means, gt_stds
 
 
 def get_filtering_datasets(x_tm1, args):

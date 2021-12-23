@@ -5,7 +5,6 @@ from ..models import *
 from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
-from ..data.two_dim import two_dim_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba  import CelebA
@@ -115,7 +114,6 @@ DATASET_TRANSFER = 'Dataset_transfer'
 DATASET_1D_COND = '1d_cond'
 DATASET_5D_COND = '5d_cond'
 DATASET_BIOCHEMICAL = 'biochemical'
-DATASET_2D = '2d'
 DATASET_LORENZ = 'lorenz'
 DATASET_CELEBA = 'celeba'
 DATASET_STACKEDMNIST = 'stackedmnist'

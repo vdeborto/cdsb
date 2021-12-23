@@ -26,10 +26,10 @@ class Langevin(torch.nn.Module):
         self.num_steps = num_steps # num diffusion steps
         self.d_x = shape_x # dimension of object to diffuse
         self.d_y = shape_y # dimension of conditioning
-        self.gammas = gammas.float() # schedule
+        self.gammas = gammas # schedule
         gammas_vec = torch.ones(self.num_steps,*self.d_x,device=device)
         for k in range(num_steps):
-            gammas_vec[k] = gammas[k].float()
+            gammas_vec[k] = gammas[k]
         self.gammas_vec = gammas_vec    
 
         if device is not None:
@@ -38,7 +38,7 @@ class Langevin(torch.nn.Module):
             self.device = gammas.device
 
         self.steps = torch.arange(self.num_steps).to(self.device)
-        self.time = torch.cumsum(self.gammas,0).to(self.device).float()
+        self.time = torch.cumsum(self.gammas, 0).to(self.device)
         self.time_sampler = time_sampler
             
 

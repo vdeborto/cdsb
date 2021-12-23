@@ -75,9 +75,9 @@ class IPFBase(torch.nn.Module):
         # get data
         self.build_dataloaders()
 
-        # checkpoint
-        date = str(datetime.datetime.now())[0:10]
-        self.name_all = date
+        # # checkpoint
+        # date = str(datetime.datetime.now())[0:10]
+        # self.name_all = date
 
         # run from checkpoint
         self.checkpoint_run = self.args.checkpoint_run
@@ -88,18 +88,26 @@ class IPFBase(torch.nn.Module):
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
 
-        
-        self.plotter = self.get_plotter()
-
-        self.tester = self.get_tester()
 
         if self.accelerator.is_main_process:
-            if not os.path.exists('./im'):
-                os.mkdir('./im')
-            if not os.path.exists('./gif'):
-                os.mkdir('./gif')
-            if not os.path.exists('./checkpoints'):
-                os.mkdir('./checkpoints')
+            self.plotter = self.get_plotter()
+
+            self.tester = self.get_tester()
+
+            ckpt_dir = './checkpoints/'
+            os.makedirs(ckpt_dir, exist_ok=True)
+            existing_versions = []
+            for d in os.listdir(ckpt_dir):
+                if os.path.isdir(os.path.join(ckpt_dir, d)) and d.startswith("version_"):
+                    existing_versions.append(int(d.split("_")[1]))
+
+            if len(existing_versions) == 0:
+                version = 0
+            else:
+                version = max(existing_versions) + 1
+
+            self.ckpt_dir = os.path.join(ckpt_dir, f"version_{version}")
+            os.makedirs(self.ckpt_dir, exist_ok=True)
 
 
         self.stride = self.args.gif_stride
@@ -283,9 +291,8 @@ class IPFBase(torch.nn.Module):
                 else:
                     sample_net = self.net[fb]
 
-                
-                name_net =  'net' + '_' + fb +'_' + str(n) + "_" + str(i) + '.ckpt'
-                name_net_ckpt = './checkpoints/' + name_net
+                name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
+                name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                 
                 if self.args.dataparallel:
                     torch.save(self.net[fb].module.state_dict(), name_net_ckpt)
@@ -293,8 +300,8 @@ class IPFBase(torch.nn.Module):
                     torch.save(self.net[fb].state_dict(), name_net_ckpt)
                     
                 if self.args.ema:
-                    name_net = 'sample_net' + '_' + fb +'_' + str(n) + "_" + str(i) + '.ckpt'
-                    name_net_ckpt = './checkpoints/' + name_net
+                    name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
+                    name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                     if self.args.dataparallel:
                         torch.save(sample_net.module.state_dict(), name_net_ckpt)
                     else:

@@ -39,7 +39,7 @@ ema: False
 ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
-npar: 50000
+npar: 10000
 batch_size: 512
 num_iter: 5000
 cache_npar: 10000

@@ -136,8 +136,11 @@ def main(args):
             np.save("x_ens_stds.npy", x_ens_stds)
             np.save("rmses.npy", rmses)
 
+        ipf.accelerator.free_memory()
+        del ipf
+
     mean_rmse = np.mean(rmses[T // 10:])
-    ipf.accelerator.print("Mean RMSE:", mean_rmse)
+    print("Mean RMSE:", mean_rmse)
 
 if __name__ == '__main__':
     main()

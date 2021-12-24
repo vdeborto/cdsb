@@ -69,7 +69,7 @@ def forward_dist_fn(data):
 
 def data_distrib(data):
     if data == 'type1':
-        T = 2000
+        T = 4000
         x_t = torch.tensor([3., -3., 12.]).view(1, 3)
         x = torch.zeros([0, 3])
         y = torch.zeros([0, 3])

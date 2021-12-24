@@ -28,8 +28,8 @@ def main(args):
 
     default_dtype = torch.get_default_dtype()
     x, y, gt_means, gt_stds = x.to(default_dtype), y.to(default_dtype), gt_means.to(default_dtype), gt_stds.to(default_dtype)
-    T, xdim = x.shape
-    ydim = y.shape[1]
+    T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
+    T_spinup = T // 2    
 
     x_0_mean = torch.tensor([3., -3., 12.])
     x_0_std = torch.ones([xdim])
@@ -62,8 +62,8 @@ def main(args):
     np.save("rmses_enkf.npy", rmses_enkf)
     np.save("filter_rmses_enkf.npy", filter_rmses_enkf)
 
-    mean_rmse_enkf = np.mean(rmses_enkf[T // 10:])
-    mean_filter_rmse_enkf = np.mean(filter_rmses_enkf[T // 10:])
+    mean_rmse_enkf = np.mean(rmses_enkf[T_spinup:])
+    mean_filter_rmse_enkf = np.mean(filter_rmses_enkf[T_spinup:])
     print("Mean RMSE (EnKF):", mean_rmse_enkf)
     print("Mean filter RMSE (EnKF):", mean_filter_rmse_enkf)
 
@@ -71,27 +71,30 @@ def main(args):
     fig = plt.figure(figsize=(15, 6))
     for i in range(3):
         plt.subplot(1, 3, i + 1)
-        plt.plot(np.arange(T), x[:, i], color="C0")
-        plt.plot(np.arange(T), y[:, i], 'o', color="C1")
-        plt.plot(np.arange(T), x_ens_means_enkf[:, i], '--', color="C2")
-        plt.fill_between(np.arange(T), x_ens_means_enkf[:, i] - x_ens_stds_enkf[:, i], x_ens_means_enkf[:, i] + x_ens_stds_enkf[:, i],
+        plt.plot(np.arange(T_spinup, T), x[T_spinup:, i], color="C0")
+        plt.plot(np.arange(T_spinup, T), y[T_spinup:, i], 'o', color="C1")
+        plt.plot(np.arange(T_spinup, T), x_ens_means_enkf[T_spinup:, i], '--', color="C2")
+        plt.fill_between(np.arange(T_spinup, T),
+                         x_ens_means_enkf[T_spinup:, i] - x_ens_stds_enkf[T_spinup:, i],
+                         x_ens_means_enkf[T_spinup:, i] + x_ens_stds_enkf[T_spinup:, i],
                          alpha=0.2, color="C2")
-        plt.plot(np.arange(T), gt_means_np[:, i], ':', color="C3")
-        plt.fill_between(np.arange(T), gt_means_np[:, i] - gt_stds_np[:, i], gt_means_np[:, i] + gt_stds_np[:, i],
+        plt.plot(np.arange(T_spinup, T), gt_means_np[T_spinup:, i], ':', color="C3")
+        plt.fill_between(np.arange(T_spinup, T),
+                         gt_means_np[T_spinup:, i] - gt_stds_np[T_spinup:, i],
+                         gt_means_np[T_spinup:, i] + gt_stds_np[T_spinup:, i],
                          alpha=0.2, color="C3")
-    plt.savefig("im/filter_mean_std_EnKF.png")
+    plt.savefig("im/filter_mean_std_enkf.png")
 
     plt.clf()
-    plt.plot(np.arange(T), rmses_enkf)
-    plt.savefig("im/rmse_EnKF.png")
+    plt.plot(np.arange(T_spinup, T), rmses_enkf[T_spinup:])
+    plt.savefig("im/rmse_enkf.png")
 
     plt.clf()
-    plt.plot(np.arange(T), filter_rmses_enkf)
+    plt.plot(np.arange(T_spinup, T), filter_rmses_enkf[T_spinup:])
     plt.savefig("im/filter_rmses_enkf.png")
 
 
     # IPF
-    x_ens = torch.randn([args.ens_size, xdim]) * x_0_std + x_0_mean
     x_ens_means = np.zeros([0, xdim])
     x_ens_stds = np.zeros([0, xdim])
     rmses = np.zeros([0])
@@ -103,76 +106,91 @@ def main(args):
         EnKF.advance_timestep(y[t])
         EnKF.update(y[t])
 
-        with torch.no_grad():
-            x_ens_repeat = x_ens.repeat(args.npar//args.ens_size, 1)
-            init_ds_repeat, final_ds_repeat, mean_final, var_final = get_filtering_datasets(x_ens_repeat, args)
-
-        ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
-        if t == 0:
-            ipf.accelerator.print(ipf.accelerator.state)
-            ipf.accelerator.print(ipf.net['b'])
-            ipf.accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
-        ipf.train()
-
-        if ipf.accelerator.is_main_process:
-            with torch.no_grad():
-                if args.cond_final:
-                    mean_final, std_final = EnKF(y[t].to(ipf.device))
-                    final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
-                    x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
-
-                    EnKF.x_T = x_ens
-                else:
-                    init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
-                    init_x, init_y = init_ds.tensors
-                    x_ens = ipf.forward_backward_sample(init_x, init_y, y[t])[-1].cpu()
-
+        if t < T_spinup:
+            x_ens = EnKF.x_T
             x_ens_means = np.row_stack([x_ens_means, x_ens.mean(0).numpy()])
             x_ens_stds = np.row_stack([x_ens_stds, x_ens.std(0).numpy()])
             rmses = np.append(rmses, np.sqrt(np.mean((x_ens_means[-1] - x_np[t]) ** 2)))
             filter_rmses = np.append(filter_rmses, np.sqrt(np.mean((x_ens_means[-1] - gt_means_np[t]) ** 2)))
 
-            ipf.accelerator.print(x[t].numpy())
-            ipf.accelerator.print(x_ens_means[-1], x_ens_stds[-1])
-            ipf.accelerator.print("RMSE:", rmses[-1])
-            ipf.accelerator.print("Filter RMSE:", filter_rmses[-1])
+            if t == T_spinup - 1:
+                print("Mean RMSE (spinup):", np.mean(rmses))
 
-            plt.clf()
-            fig = plt.figure(figsize=(15, 6))
-            for i in range(3):
-                plt.subplot(1, 3, i+1)
-                plt.plot(np.arange(t+1), x[:t+1, i], color="C0")
-                plt.plot(np.arange(t+1), y[:t+1, i], 'o', color="C1")
-                plt.plot(np.arange(t+1), x_ens_means[:, i], '--', color="C2")
-                plt.fill_between(np.arange(t+1), x_ens_means[:, i] - x_ens_stds[:, i], x_ens_means[:, i] + x_ens_stds[:, i],
-                                 alpha=0.2, color="C2")
-                plt.plot(np.arange(t+1), gt_means_np[:t+1, i], ':', color="C3")
-                plt.fill_between(np.arange(t+1), gt_means_np[:t+1, i] - gt_stds_np[:t+1, i], gt_means_np[:t+1, i] + gt_stds_np[:t+1, i],
-                                 alpha=0.2, color="C3")
-            plt.savefig("im/filter_mean_std.png")
+        else:
+            with torch.no_grad():
+                x_ens_repeat = x_ens.repeat(args.npar//args.ens_size, 1)
+                init_ds_repeat, final_ds_repeat, mean_final, var_final = get_filtering_datasets(x_ens_repeat, args)
 
-            plt.clf()
-            plt.plot(np.arange(t+1), rmses, label=f'CDSB (RMSE {np.mean(rmses)})')
-            plt.plot(np.arange(t+1), rmses_enkf[:t+1], label=f'EnKF (RMSE {np.mean(rmses_enkf[:t+1])})')
-            plt.legend()
-            plt.savefig("im/rmse.png")
+            ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
+            if t == T_spinup:
+                ipf.accelerator.print(ipf.accelerator.state)
+                ipf.accelerator.print(ipf.net['b'])
+                ipf.accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
+            ipf.train()
 
-            plt.clf()
-            plt.plot(np.arange(t+1), filter_rmses, label=f'CDSB (Filter RMSE {np.mean(rmses)})')
-            plt.plot(np.arange(t+1), filter_rmses_enkf[:t+1], label=f'EnKF (Filter RMSE {np.mean(rmses_enkf[:t+1])})')
-            plt.legend()
-            plt.savefig("im/filter_rmse.png")
+            if ipf.accelerator.is_main_process:
+                with torch.no_grad():
+                    if args.cond_final:
+                        mean_final, std_final = EnKF(y[t].to(ipf.device))
+                        final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
+                        x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
 
-            np.save("x_ens_means.npy", x_ens_means)
-            np.save("x_ens_stds.npy", x_ens_stds)
-            np.save("rmses.npy", rmses)
-            np.save("filter_rmses.npy", filter_rmses)
+                        EnKF.x_T = x_ens
+                    else:
+                        init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
+                        init_x, init_y = init_ds.tensors
+                        x_ens = ipf.forward_backward_sample(init_x, init_y, y[t])[-1].cpu()
 
-        ipf.accelerator.free_memory()
-        del ipf
+                x_ens_means = np.row_stack([x_ens_means, x_ens.mean(0).numpy()])
+                x_ens_stds = np.row_stack([x_ens_stds, x_ens.std(0).numpy()])
+                rmses = np.append(rmses, np.sqrt(np.mean((x_ens_means[-1] - x_np[t]) ** 2)))
+                filter_rmses = np.append(filter_rmses, np.sqrt(np.mean((x_ens_means[-1] - gt_means_np[t]) ** 2)))
 
-    mean_rmse = np.mean(rmses[T // 10:])
-    mean_filter_rmse = np.mean(filter_rmses[T // 10:])
+                ipf.accelerator.print(x[t].numpy())
+                ipf.accelerator.print(x_ens_means[-1], x_ens_stds[-1])
+                ipf.accelerator.print("RMSE:", rmses[-1])
+                ipf.accelerator.print("Filter RMSE:", filter_rmses[-1])
+
+                plt.clf()
+                fig = plt.figure(figsize=(15, 6))
+                for i in range(3):
+                    plt.subplot(1, 3, i+1)
+                    plt.plot(np.arange(T_spinup, t+1), x[T_spinup:t+1, i], color="C0")
+                    plt.plot(np.arange(T_spinup, t+1), y[T_spinup:t+1, i], 'o', color="C1")
+                    plt.plot(np.arange(T_spinup, t+1), x_ens_means[T_spinup:, i], '--', color="C2")
+                    plt.fill_between(np.arange(T_spinup, t+1),
+                                     x_ens_means[T_spinup:, i] - x_ens_stds[T_spinup:, i],
+                                     x_ens_means[T_spinup:, i] + x_ens_stds[T_spinup:, i],
+                                     alpha=0.2, color="C2")
+                    plt.plot(np.arange(T_spinup, t+1), gt_means_np[T_spinup:t+1, i], ':', color="C3")
+                    plt.fill_between(np.arange(T_spinup, t+1),
+                                     gt_means_np[T_spinup:t+1, i] - gt_stds_np[T_spinup:t+1, i],
+                                     gt_means_np[T_spinup:t+1, i] + gt_stds_np[T_spinup:t+1, i],
+                                     alpha=0.2, color="C3")
+                plt.savefig("im/filter_mean_std.png")
+
+                plt.clf()
+                plt.plot(np.arange(T_spinup, t+1), rmses[T_spinup:], label=f'CDSB (RMSE {np.mean(rmses[T_spinup:])})')
+                plt.plot(np.arange(T_spinup, t+1), rmses_enkf[T_spinup:t+1], label=f'EnKF (RMSE {np.mean(rmses_enkf[T_spinup:t+1])})')
+                plt.legend()
+                plt.savefig("im/rmse.png")
+
+                plt.clf()
+                plt.plot(np.arange(T_spinup, t+1), filter_rmses[T_spinup:], label=f'CDSB (Filter RMSE {np.mean(filter_rmses[T_spinup:])})')
+                plt.plot(np.arange(T_spinup, t+1), filter_rmses_enkf[T_spinup:t+1], label=f'EnKF (Filter RMSE {np.mean(filter_rmses_enkf[T_spinup:t+1])})')
+                plt.legend()
+                plt.savefig("im/filter_rmse.png")
+
+                np.save("x_ens_means.npy", x_ens_means)
+                np.save("x_ens_stds.npy", x_ens_stds)
+                np.save("rmses.npy", rmses)
+                np.save("filter_rmses.npy", filter_rmses)
+
+            ipf.accelerator.free_memory()
+            del ipf
+
+    mean_rmse = np.mean(rmses[T_spinup:])
+    mean_filter_rmse = np.mean(filter_rmses[T_spinup:])
     print("Mean RMSE:", mean_rmse)
     print("Mean filter RMSE:", mean_filter_rmse)
 

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as functional
 from torch.distributions import Categorical
-from utils import sample_cov, ess
+from utils import sample_cov, log_ess
 
 
 class EnsembleKalmanFilter(nn.Module):
@@ -79,7 +79,7 @@ class BootstrapParticleFilter(nn.Module):
         self.x_T = None
 
         # Initial weights (1/num_particles)
-        self.log_w = np.log(1 / self.num_particles) * torch.ones((self.num_particles, 1))
+        self.log_w = - np.log(self.num_particles) * torch.ones((self.num_particles, 1))
 
     def advance_timestep(self, y_T):
         self.T += 1
@@ -113,11 +113,11 @@ class BootstrapParticleFilter(nn.Module):
         resampling_dist = Categorical(logits=self.log_w[:, 0])
         ancestors = resampling_dist.sample((self.num_particles,))
         self.x_Tm1 = self.x_Tm1[ancestors, :]
-        self.log_w = np.log(1 / self.num_particles) * torch.ones((self.num_particles, 1))
+        self.log_w = - np.log(self.num_particles) * torch.ones((self.num_particles, 1))
 
     def resample_criterion(self):
         if self.T > 0:
-            return ess(self.log_w) <= self.num_particles / 2
+            return log_ess(self.log_w) <= np.log(self.num_particles/2)
         else:
             return False
 

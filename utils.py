@@ -13,12 +13,14 @@ def sample_cov(x, y=None, w=None):
     cov = (w * x_centred).transpose(-2, -1) @ y_centred / (1 - (w**2).sum(-2, keepdim=True))  # (batch, xdim, ydim)
     return cov
 
-def ess(log_w):
+def log_ess(log_w):
     ess_num = 2 * torch.logsumexp(log_w, 0)
     ess_denom = torch.logsumexp(2 * log_w, 0)
     log_ess = ess_num - ess_denom
-    return log_ess.exp()
+    return log_ess
 
+def mean_rmse(x1, x2):
+    return ((((x1 - x2)**2).mean(-1))**0.5).mean()
 
 if __name__ == '__main__':
     test = torch.randn(100, 5)

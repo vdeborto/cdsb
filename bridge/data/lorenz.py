@@ -4,9 +4,12 @@ from torch.utils.data import TensorDataset
 from torch.distributions import Normal, Independent
 from scipy.integrate import solve_ivp, odeint
 import os
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from tqdm import tqdm
-from bridge.models.cond import BootstrapParticleFilter
 
+from bridge.models.cond import BootstrapParticleFilter
+from utils import mean_rmse
 
 def RK4_step(f, t, x, h):
     k1 = h * f(t, x)
@@ -45,6 +48,7 @@ def forward_dist_fn(data):
         sigma = 10.0
         beta = 8.0 / 3.0
         dt = 0.1
+        delta = 0.05
         y_std = 2
 
         def f(t, state):
@@ -53,7 +57,11 @@ def forward_dist_fn(data):
             f2 = state[..., 0] * state[..., 1] - beta * state[..., 2]
             return torch.stack([f0, f1, f2], -1)
 
-        F_fn = lambda x, t: Independent(Normal(RK45_step(f, 0, x, dt), 0., validate_args=False), 1)
+        def F_fn(x, t):
+            for _ in range(int(dt/delta)):
+                x = RK45_step(f, 0, x, delta)
+            return Independent(Normal(x, 0.01), 1)
+
         G_fn = lambda x, t: Independent(Normal(x, y_std * torch.ones_like(x)), 1)
 
     return F_fn, G_fn
@@ -62,7 +70,7 @@ def forward_dist_fn(data):
 def data_distrib(data):
     if data == 'type1':
         T = 2000
-        x_t = torch.ones([1, 3])
+        x_t = torch.tensor([3., -3., 12.]).view(1, 3)
         x = torch.zeros([0, 3])
         y = torch.zeros([0, 3])
         for n in range(T):
@@ -88,7 +96,7 @@ def lorenz_process(root, data_tag):
         gt_means, gt_stds = torch.load(gt_filter_path)
     else:
         T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
-        x_0_mean = torch.ones([xdim])
+        x_0_mean = torch.tensor([3., -3., 12.])
         x_0_std = torch.ones([xdim])
 
         # BPF
@@ -97,7 +105,7 @@ def lorenz_process(root, data_tag):
 
         p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
         F_fn, G_fn = forward_dist_fn(data_tag)
-        BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 1000)
+        BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 100000)
 
         for t in tqdm(range(T)):
             BPF.advance_timestep(y[t])
@@ -110,6 +118,16 @@ def lorenz_process(root, data_tag):
             gt_stds = torch.vstack([gt_stds, gt_std])
 
         torch.save([gt_means, gt_stds], gt_filter_path)
+    print("Mean RMSE (BPF):", mean_rmse(x, gt_means).numpy())
+
+    fig = plt.figure()
+    ax = fig.gca(projection="3d")
+    ax.plot(x[:, 0].numpy(), x[:, 1].numpy(), x[:, 2].numpy())
+    # ax.plot(y[:, 0], y[:, 1], y[:, 2])
+    plt.draw()
+    plt.savefig(os.path.join(root, data_tag, "data.png"))
+    plt.close()
+
     return x, y, gt_means, gt_stds
 
 

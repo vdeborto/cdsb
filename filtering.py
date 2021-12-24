@@ -25,10 +25,13 @@ def main(args):
     x, y, gt_means, gt_stds = get_filtering_process(args)
     x_np = x.detach().cpu().numpy()
     gt_means_np, gt_stds_np = gt_means.detach().cpu().numpy(), gt_stds.detach().cpu().numpy()
+
+    default_dtype = torch.get_default_dtype()
+    x, y, gt_means, gt_stds = x.to(default_dtype), y.to(default_dtype), gt_means.to(default_dtype), gt_stds.to(default_dtype)
     T, xdim = x.shape
     ydim = y.shape[1]
 
-    x_0_mean = torch.ones([xdim])
+    x_0_mean = torch.tensor([3., -3., 12.])
     x_0_std = torch.ones([xdim])
 
 

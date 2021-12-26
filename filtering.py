@@ -92,6 +92,7 @@ def main(args):
     plt.clf()
     plt.plot(np.arange(T_spinup, T), filter_rmses_enkf[T_spinup:])
     plt.savefig("im/filter_rmses_enkf.png")
+    plt.close()
 
 
     # IPF
@@ -120,6 +121,11 @@ def main(args):
             with torch.no_grad():
                 x_ens_repeat = x_ens.repeat(args.npar//args.ens_size, 1)
                 init_ds_repeat, final_ds_repeat, mean_final, var_final = get_filtering_datasets(x_ens_repeat, args)
+            print("True state:", x_np[t])
+            print("Filter mean:", gt_means_np[t])
+            print("Filter std:", gt_stds_np[t])
+            print("Prior mean:", init_ds_repeat.tensors[0].mean(0).numpy())
+            print("Prior std:", init_ds_repeat.tensors[0].std(0).numpy())
 
             ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
             if t == T_spinup:
@@ -139,7 +145,7 @@ def main(args):
                     else:
                         init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
                         init_x, init_y = init_ds.tensors
-                        x_ens = ipf.forward_backward_sample(init_x, init_y, y[t])[-1].cpu()
+                        x_ens = ipf.forward_backward_sample(init_x, init_y, y[t], args.n_ipf, 'f')[-1].cpu()
 
                 x_ens_means = np.row_stack([x_ens_means, x_ens.mean(0).numpy()])
                 x_ens_stds = np.row_stack([x_ens_stds, x_ens.std(0).numpy()])
@@ -180,6 +186,7 @@ def main(args):
                 plt.plot(np.arange(T_spinup, t+1), filter_rmses_enkf[T_spinup:t+1], label=f'EnKF (Filter RMSE {np.mean(filter_rmses_enkf[T_spinup:t+1])})')
                 plt.legend()
                 plt.savefig("im/filter_rmse.png")
+                plt.close()
 
                 np.save("x_ens_means.npy", x_ens_means)
                 np.save("x_ens_stds.npy", x_ens_stds)
@@ -193,6 +200,7 @@ def main(args):
     mean_filter_rmse = np.mean(filter_rmses[T_spinup:])
     print("Mean RMSE:", mean_rmse)
     print("Mean filter RMSE:", mean_filter_rmse)
+
 
 if __name__ == '__main__':
     main()

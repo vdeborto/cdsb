@@ -19,8 +19,8 @@ transfer: False
 cond_final: False
 
 
-adaptive_mean: False
-final_adaptive: True
+adaptive_mean: True
+final_adaptive: False
 mean_final: torch.zeros(${x_dim})
 var_final: 1.*torch.ones(${x_dim})
 
@@ -40,7 +40,7 @@ ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
 npar: 10000
-batch_size: 1000
+batch_size: 500
 num_iter: 5000
 cache_npar: 10000
 n_ipf: 5
@@ -57,8 +57,8 @@ fast_sampling: True
 
 
 # logging
-plot_npar: 2000
-test_npar: 50000
+plot_npar: 1000
+test_npar: 1000
 log_stride: 50
 gif_stride: ${num_iter}
 

@@ -16,17 +16,23 @@ class Tester:
     def test_cond(self, *args, **kwargs):
         return {}
 
-    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None):
+    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None,
+                 mean_final=None, var_final=None):
         x_last = x_tot[-1]
 
-        x_var_last = torch.var(x_last).item()
-        x_var_start = torch.var(x_start).item()
+        x_var_last = torch.var(x_last, dim=0).mean().item()
+        x_var_start = torch.var(x_start, dim=0).mean().item()
         x_mean_last = torch.mean(x_last).item()
         x_mean_start = torch.mean(x_start).item()
 
         out = {'FB': fb,
                'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
                'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
+
+        if mean_final is not None:
+            x_mse_last = torch.mean((x_last - mean_final) ** 2)
+            x_mse_start = torch.mean((x_start - mean_final) ** 2)
+            out.update({"x_mse_start": x_mse_start, "x_mse_last": x_mse_last})
 
         out.update(self.test_joint(y_start, x_tot, x_init, data, i, n, fb))
         out.update(self.test_cond(y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond))

@@ -243,14 +243,14 @@ def get_final_dataset(args, init_ds):
             vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
             # mean_final = vec[0] * 0 + mean_final
-            var_final = eval(args.var_final)
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
         elif args.final_adaptive:
             vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
             var_final = vec.var(axis=0)
         else:
-            mean_final = eval(args.mean_final)
-            var_final = eval(args.var_final)
+            mean_final = eval(args.mean_final) if isinstance(args.mean_final, str) else torch.tensor([args.mean_final])
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
         final_ds = None
 
     return final_ds, mean_final, var_final
@@ -285,27 +285,27 @@ def get_filtering_datasets(x_tm1, args):
         if args.adaptive_mean:
             vec = next(iter(DataLoader(final_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
-            var_final = eval(args.var_final)
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
         elif args.final_adaptive:
             vec = next(iter(DataLoader(final_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
             var_final = vec.var(axis=0)
         else:
-            mean_final = eval(args.mean_final)
-            var_final = eval(args.var_final)
+            mean_final = eval(args.mean_final) if isinstance(args.mean_final, str) else torch.tensor([args.mean_final])
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
 
     if not args.transfer:
         if args.adaptive_mean:
             vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
-            var_final = eval(args.var_final)
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
         elif args.final_adaptive:
             vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX, shuffle=True)))[0]
             mean_final = vec.mean(axis=0)
             var_final = vec.var(axis=0)
         else:
-            mean_final = eval(args.mean_final)
-            var_final = eval(args.var_final)
+            mean_final = eval(args.mean_final) if isinstance(args.mean_final, str) else torch.tensor([args.mean_final])
+            var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
         final_ds = None
 
     return init_ds, final_ds, mean_final, var_final

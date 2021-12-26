@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats as stats
 import matplotlib.pyplot as plt
 import matplotlib
 import torch
@@ -48,11 +49,14 @@ class Plotter(object):
         self.num_steps = num_steps
         self.gammas = gammas
 
-    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None):
-        self.plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb)
+    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None,
+                 mean_final=None, var_final=None):
+        self.plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb,
+                                 mean_final=mean_final, var_final=var_final)
         self.plot_sequence_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond)
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+                            mean_final=None, var_final=None):
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
         name = str(i) + '_' + fb + '_' + str(n) + '_'
@@ -66,23 +70,88 @@ class Plotter(object):
 
         name_gif = name + '_histogram'
         plot_paths_reg = []
-        x_min, x_max = np.min(x_tot), np.max(x_tot)
-        dims = np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False)
+        dims = np.sort(np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False))
         for k in range(self.num_steps):
             if k % freq == 0:
                 filename = name_gif + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
                 plt.clf()
+                fig = plt.figure(figsize=(5*len(dims), 4))
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
 
-                for dim in dims:
-                    plt.hist(x_tot[k, :, dim], bins=50, density=True, range=(x_min, x_max), alpha=0.5)
+                for d in range(len(dims)):
+                    dim = dims[d]
+                    x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+                    ax = plt.subplot(1, len(dims), d+1)
+                    plt.hist(x_tot[k, :, dim], bins=50, density=True, alpha=0.5)
+                    if mean_final is not None and var_final is not None and fb == 'f':
+                        if (mean_final + x_start[:1]).shape[0] == 1 and (var_final + x_start[:1]).shape[0] == 1:
+                            mu = mean_final.view(-1)[dim]
+                            sig = np.sqrt(var_final.view(-1)[dim])
+                            x_lin = np.linspace(x_min, x_max, 250)
+                            plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
+                    ax.set_xlim(x_min, x_max)
                 plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                plt.close()
                 plot_paths_reg.append(filename)
 
         make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+
+        if x_start[0].shape == y_start[0].shape:
+            npts = 250
+            x_start = x_start.cpu().reshape(x_start.shape[0], -1).numpy()
+            y_start = y_start.cpu().reshape(y_start.shape[0], -1).numpy()
+
+            if n == 0 and fb == "f":
+                plt.clf()
+                filename = 'original_density.png'
+                filename = os.path.join(self.im_dir, filename)
+
+                fig = plt.figure(figsize=(5*len(dims), 4))
+                for d in range(len(dims)):
+                    dim = dims[d]
+                    x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+                    y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
+                    ax = plt.subplot(1, len(dims), d+1)
+                    kde_yx = kde.gaussian_kde([y_start[:, dim], x_start[:, dim]])
+                    xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
+                    zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
+                    plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+                    plt.xlabel("y")
+                    plt.ylabel("x")
+                plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                plt.close()
+
+            name_gif = name + '_density'
+            plot_paths_reg = []
+            for k in range(self.num_steps):
+                if k % freq == 0:
+                    filename = name_gif + '_' + str(k) + '.png'
+                    filename = os.path.join(im_dir, filename)
+                    plt.clf()
+                    fig = plt.figure(figsize=(5*len(dims), 4))
+                    if n is not None:
+                        str_title = 'IPFP iteration: ' + str(n)
+                        plt.title(str_title)
+
+                    for d in range(len(dims)):
+                        dim = dims[d]
+                        x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+                        y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
+                        ax = plt.subplot(1, len(dims), d+1)
+                        kde_yx = kde.gaussian_kde([y_start[:, dim], x_tot[k, :, dim]])
+                        xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
+                        zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
+                        plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+                        plt.xlabel("y")
+                        plt.ylabel("x")
+                    plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                    plt.close()
+                    plot_paths_reg.append(filename)
+
+            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         pass
@@ -100,8 +169,10 @@ class ImPlotter(Plotter):
         # self.num_digits = 20
         self.plot_level = plot_level
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
-        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq)
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+                            mean_final=None, var_final=None):
+        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq,
+                                    mean_final=mean_final, var_final=var_final)
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
 
@@ -169,7 +240,8 @@ class ImPlotter(Plotter):
 
 
 class OneDCondPlotter(Plotter):
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+                            mean_final=None, var_final=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb + '_' + str(n) + '_'
@@ -208,11 +280,13 @@ class OneDCondPlotter(Plotter):
             plt.clf()
             filename = 'original_density.png'
             filename = os.path.join(self.im_dir, filename)
-            k = kde.gaussian_kde([y_start[:,0], x_start[:,0]])
+            kde_yx = kde.gaussian_kde([y_start[:,0], x_start[:,0]])
             xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
-            zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+            zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
             plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
-            plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)                
+            plt.xlabel("y")
+            plt.ylabel("x")
+            plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
 
         name_gif = name + '_density'
         plot_paths_reg = []
@@ -224,10 +298,12 @@ class OneDCondPlotter(Plotter):
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
-                k = kde.gaussian_kde([y_start[:, 0], x_tot[k, :, 0]])
+                kde_yx = kde.gaussian_kde([y_start[:, 0], x_tot[k, :, 0]])
                 xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
-                zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+                zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+                plt.xlabel("y")
+                plt.ylabel("x")
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
 
@@ -429,11 +505,6 @@ class BiochemicalPlotter(Plotter):
                            ipf_it=ipf_it,
                            freq=self.num_steps//min(self.num_steps,50),
                            im_dir=self.im_dir, gif_dir=self.gif_dir)
-
-
-    def __call__(self, x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
-        self.plot(x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward)
-
 
     @staticmethod
     def save_sequence_cond_biochemical(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):

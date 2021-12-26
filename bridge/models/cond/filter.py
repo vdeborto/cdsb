@@ -55,7 +55,7 @@ class EnsembleKalmanFilter(nn.Module):
         return x_t_mean, x_t_cov
 
     def forward(self, y):
-        x = self.x_T_pred.to(y.device) + (y.unsqueeze(-2) - self.y_T_pred.to(y.device)) @ self.K.to(y.device).t()
+        x = self.x_T_pred.to(y.device) + (y.view(*y.shape[:-1], 1, self.ydim) - self.y_T_pred.to(y.device)) @ self.K.to(y.device).t()
         return x.mean(-2), x.std(-2)
 
 

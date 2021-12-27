@@ -46,7 +46,7 @@ def CacheLoader(fb, sample_net, dataloader_b, dataloader_f, num_batches, langevi
     data_steps = torch.cat(data_steps, dim=0)
 
     stop = time.time()
-    # print('Cache size: {0}'.format(data_x.shape))
-    # print("Load time: {0}".format(stop-start))
+    ipf.accelerator.print('Cache size: {0}'.format(data_x.shape))
+    ipf.accelerator.print("Load time: {0}".format(stop-start))
 
     return TensorDataset(data_x, data_y, data_out, data_steps)

@@ -17,8 +17,7 @@ def main(args):
     accelerator = Accelerator(fp16=False, cpu=args.device == 'cpu', split_batches=True)
     accelerator.print('Directory: ' + os.getcwd())
     
-    if accelerator.is_main_process:
-        init_ds, final_ds, mean_final, var_final = get_datasets(args)
+    init_ds, final_ds, mean_final, var_final = get_datasets(args)
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator)
     accelerator.print(accelerator.state)

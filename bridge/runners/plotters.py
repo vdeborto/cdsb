@@ -67,6 +67,11 @@ class Plotter(object):
             os.mkdir(im_dir)
 
         x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
+        x_start = x_start.cpu().numpy()
+        if mean_final is not None:
+            mean_final = mean_final.cpu().numpy() + np.zeros_like(x_start[:1])
+        if var_final is not None:
+            var_final = var_final.cpu().numpy() + np.zeros_like(x_start[:1])
 
         name_gif = name + '_histogram'
         plot_paths_reg = []
@@ -87,9 +92,9 @@ class Plotter(object):
                     ax = plt.subplot(1, len(dims), d+1)
                     plt.hist(x_tot[k, :, dim], bins=50, density=True, alpha=0.5)
                     if mean_final is not None and var_final is not None and fb == 'f':
-                        if (mean_final + x_start[:1]).shape[0] == 1 and (var_final + x_start[:1]).shape[0] == 1:
-                            mu = mean_final.view(-1)[dim]
-                            sig = np.sqrt(var_final.view(-1)[dim])
+                        if mean_final.shape[0] == 1 and var_final.shape[0] == 1:
+                            mu = mean_final.reshape([-1])[dim]
+                            sig = np.sqrt(var_final.reshape([-1])[dim])
                             x_lin = np.linspace(x_min, x_max, 250)
                             plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
                     ax.set_xlim(x_min, x_max)

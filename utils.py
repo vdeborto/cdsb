@@ -22,6 +22,21 @@ def log_ess(log_w):
 def mean_rmse(x1, x2):
     return ((((x1 - x2)**2).mean(-1))**0.5).mean()
 
+
+class WrappedDataLoader:
+    def __init__(self, dl, func):
+        self.dl = dl
+        self.func = func
+
+    def __len__(self):
+        return len(self.dl)
+
+    def __iter__(self):
+        batches = iter(self.dl)
+        for b in batches:
+            yield (self.func(*b))
+
+
 if __name__ == '__main__':
     test = torch.randn(100, 5)
     assert torch.allclose(torch.cov(test.t()), sample_cov(test))

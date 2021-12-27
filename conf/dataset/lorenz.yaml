@@ -27,10 +27,8 @@ var_final: 1.*torch.ones(${x_dim})
 
 # device
 device: cpu
-dataparallel: False
 num_workers: 0
 pin_memory: False
-distributed: False
 
 # training
 use_prev_net: False

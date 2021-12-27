@@ -16,10 +16,8 @@ var_final: 1.*torch.tensor([1., 1.])
 
 # device
 device: cpu
-dataparallel: False
 num_workers: 8
 pin_memory: False
-distributed: False
 
 # training
 use_prev_net: False

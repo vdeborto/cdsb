@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
+from utils import WrappedDataLoader
 from .config_getters import get_models, get_optimizers, get_datasets, get_plotter, get_logger, get_tester
 import datetime
 from tqdm import tqdm
@@ -17,12 +18,14 @@ from torch.utils.data import WeightedRandomSampler
 from accelerate import Accelerator, DistributedType
 import time
 
-class IPFBase(torch.nn.Module):
-
-    def __init__(self, init_ds, final_ds, mean_final, var_final, args, final_cond_model=None):
+class IPFBase:
+    def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None):
         super().__init__()
-        self.accelerator = Accelerator(fp16=False, cpu=args.device=='cpu', split_batches=True)
-        self.device = self.accelerator.device
+        if accelerator is None:
+            self.accelerator = Accelerator(fp16=False, cpu=args.device == 'cpu', split_batches=True)
+        else:
+            self.accelerator = accelerator
+        self.device = self.accelerator.device  # local device for each process
 
         self.args = args
 
@@ -151,10 +154,6 @@ class IPFBase(torch.nn.Module):
                 net_f.load_state_dict(torch.load(self.args.checkpoint_f))
             if "checkpoint_b" in self.args:
                 net_b.load_state_dict(torch.load(self.args.checkpoint_b))                
-        
-        if self.args.dataparallel:
-            net_f = torch.nn.DataParallel(net_f)
-            net_b = torch.nn.DataParallel(net_b)
 
         if forward_or_backward is None:
             net_f = net_f.to(self.device)
@@ -177,7 +176,7 @@ class IPFBase(torch.nn.Module):
 
     def build_ema(self):
         if self.args.ema:
-            self.ema_helpers={}                
+            self.ema_helpers = {}
             self.update_ema('f')
             self.update_ema('b')
 
@@ -186,16 +185,12 @@ class IPFBase(torch.nn.Module):
                 sample_net_f, sample_net_b = get_models(self.args)
                 
                 if "sample_checkpoint_f" in self.args:
-                    sample_net_f.load_state_dict(torch.load(self.args.sample_checkpoint_f))  
-                    if self.args.dataparallel:
-                        sample_net_f = torch.nn.DataParallel(sample_net_f)
-                    sample_net_f=sample_net_f.to(self.device)
+                    sample_net_f.load_state_dict(torch.load(self.args.sample_checkpoint_f))
+                    sample_net_f = sample_net_f.to(self.device)
                     self.ema_helpers['f'].register(sample_net_f)
                 if "sample_checkpoint_b" in self.args:
                     sample_net_b.load_state_dict(torch.load(self.args.sample_checkpoint_b))
-                    if self.args.dataparallel:
-                        sample_net_b = torch.nn.DataParallel(sample_net_b)
-                    sample_net_b=sample_net_b.to(self.device)
+                    sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
                                       
     def build_optimizers(self):
@@ -217,18 +212,24 @@ class IPFBase(torch.nn.Module):
         self.cache_npar = min(self.args.cache_npar, len(self.init_ds))
         
         # get plotter, gifs etc.
-        self.save_init_dl = DataLoader(self.init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
         self.cache_init_dl = DataLoader(self.init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
-        (self.cache_init_dl, self.save_init_dl) = self.accelerator.prepare(self.cache_init_dl, self.save_init_dl)
+        self.cache_init_dl = self.accelerator.prepare(self.cache_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
-        self.save_init_dl = repeater(self.save_init_dl)
+
+        if self.accelerator.is_main_process:
+            self.save_init_dl = DataLoader(self.init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+            self.save_init_dl = WrappedDataLoader(self.save_init_dl, lambda x, y: (x.to(self.device), y.to(self.device)))
+            self.save_init_dl = repeater(self.save_init_dl)
 
         if self.transfer:
-            self.save_final_dl = DataLoader(self.final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
             self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
-            (self.cache_final_dl, self.save_final_dl) = self.accelerator.prepare(self.cache_final_dl, self.save_final_dl)
+            self.cache_final_dl = self.accelerator.prepare(self.cache_final_dl)
             self.cache_final_dl = repeater(self.cache_final_dl)
-            self.save_final_dl = repeater(self.save_final_dl)
+
+            if self.accelerator.is_main_process:
+                self.save_final_dl = DataLoader(self.final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
+                self.save_final_dl = WrappedDataLoader(self.save_final_dl, lambda x, y: (x.to(self.device), y.to(self.device)))
+                self.save_final_dl = repeater(self.save_final_dl)
         else:
             self.cache_final_dl = None
             self.save_final_dl = None
@@ -293,19 +294,13 @@ class IPFBase(torch.nn.Module):
 
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-                
-                if self.args.dataparallel:
-                    torch.save(self.net[fb].module.state_dict(), name_net_ckpt)
-                else:
-                    torch.save(self.net[fb].state_dict(), name_net_ckpt)
-                    
+
+                torch.save(self.net[fb].state_dict(), name_net_ckpt)
+
                 if self.args.ema:
                     name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                     name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-                    if self.args.dataparallel:
-                        torch.save(sample_net.module.state_dict(), name_net_ckpt)
-                    else:
-                        torch.save(sample_net.state_dict(), name_net_ckpt)
+                    torch.save(sample_net.state_dict(), name_net_ckpt)
 
                 if not self.args.nosave:
                     with torch.no_grad():
@@ -446,6 +441,7 @@ class IPFBase(torch.nn.Module):
 
     def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fb, fix_seed=False, return_fwd_tot=False):
         if self.accelerator.is_main_process:
+            assert not self.cond_final
             x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fb, fix_seed=fix_seed)
             final_batch_x = x_tot[-1]
             if return_fwd_tot:
@@ -478,10 +474,10 @@ class IPFSequential(IPFBase):
             self.set_seed(seed=n*self.num_iter+i)
 
             x, y, out, steps_expanded = next(new_dl)
-            x = x.to(self.device)
-            y = y.to(self.device)
-            out = out.to(self.device)
-            steps_expanded = steps_expanded.to(self.device)
+            # x = x.to(self.device)
+            # y = y.to(self.device)
+            # out = out.to(self.device)
+            # steps_expanded = steps_expanded.to(self.device)
             eval_steps = self.num_steps - 1 - steps_expanded
 
             if self.args.mean_match:

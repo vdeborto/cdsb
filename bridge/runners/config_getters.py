@@ -103,6 +103,9 @@ def get_models(args):
 
 # Optimizer
 #--------------------------------------------------------------------------------
+def get_optimizer(net, lr):
+    return torch.optim.Adam(net.parameters(), lr=lr)
+
 def get_optimizers(net_f, net_b, lr):
     return torch.optim.Adam(net_f.parameters(), lr=lr), torch.optim.Adam(net_b.parameters(), lr=lr)
 

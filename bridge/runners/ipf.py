@@ -5,7 +5,7 @@ import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
 from utils import WrappedDataLoader
-from .config_getters import get_models, get_optimizers, get_datasets, get_plotter, get_logger, get_tester
+from .config_getters import get_models, get_optimizer, get_datasets, get_plotter, get_logger, get_tester
 import datetime
 from tqdm import tqdm
 from .ema import EMAHelper
@@ -61,7 +61,7 @@ class IPFBase:
         self.build_ema()
 
         # get optims
-        self.build_optimizers()
+        # self.build_optimizers()
 
         # get loggers
         self.logger = self.get_logger('train_logs')
@@ -133,8 +133,7 @@ class IPFBase:
         self.cond_final = self.args.cond_final
         assert (not self.transfer or not self.cond_final)
         if self.cond_final:
-            self.final_cond_model = final_cond_model
-            self.final_cond_model = self.accelerator.prepare(self.final_cond_model)
+            self.final_cond_model = final_cond_model.to(self.device).eval()
 
     def get_logger(self, name='logs'):
         return get_logger(self.args, name)
@@ -193,11 +192,9 @@ class IPFBase:
                     sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
                                       
-    def build_optimizers(self):
-        optimizer_f, optimizer_b = get_optimizers(self.net['f'], self.net['b'], self.lr)
-        optimizer_b = optimizer_b
-        optimizer_f = optimizer_f
-        self.optimizer = {'f': optimizer_f, 'b':optimizer_b}
+    def build_optimizer(self, forward_or_backward):
+        optimizer = get_optimizer(self.net[forward_or_backward], self.lr)
+        self.optimizer = {forward_or_backward: optimizer}
 
     def build_dataloaders(self):
         def worker_init_fn(worker_id):
@@ -210,8 +207,7 @@ class IPFBase:
 
         self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(self.init_ds))
         self.cache_npar = min(self.args.cache_npar, len(self.init_ds))
-        
-        # get plotter, gifs etc.
+
         self.cache_init_dl = DataLoader(self.init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
         self.cache_init_dl = self.accelerator.prepare(self.cache_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
@@ -356,7 +352,6 @@ class IPFBase:
             init_batch_x = batch_x
 
             if self.cond_final:
-                self.final_cond_model.eval()
                 mean, std = self.final_cond_model(batch_y)
                 # batch_x = mean + std * torch.randn_like(init_batch_x)
 
@@ -372,7 +367,6 @@ class IPFBase:
             batch_y = init_batch[1]
             init_batch_x = init_batch[0]
         elif self.cond_final:
-            self.final_cond_model.eval()
             init_batch = next(init_dl)
             init_batch_x = init_batch[0]
             batch_y = init_batch[1]
@@ -455,6 +449,7 @@ class IPFBase:
         torch.cuda.manual_seed_all(seed)
 
     def clear(self):
+        self.accelerator.free_memory()
         torch.cuda.empty_cache()
 
 
@@ -467,7 +462,7 @@ class IPFSequential(IPFBase):
             self.build_models(forward_or_backward)
             self.update_ema(forward_or_backward)
 
-        self.build_optimizers() 
+        self.build_optimizer(forward_or_backward)
         self.accelerate(forward_or_backward)
         
         for i in tqdm(range(1, self.num_iter+1)):
@@ -516,6 +511,8 @@ class IPFSequential(IPFBase):
                 new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
         
         new_dl = None
+
+        self.net[forward_or_backward] = self.accelerator.unwrap(self.net[forward_or_backward])
         self.clear()
 
     def train(self):

@@ -48,5 +48,7 @@ def CacheLoader(fb, sample_net, dataloader_b, dataloader_f, num_batches, langevi
     stop = time.time()
     ipf.accelerator.print('Cache size: {0}'.format(data_x.shape))
     ipf.accelerator.print("Load time: {0}".format(stop-start))
+    ipf.accelerator.print("Out mean: {0}".format(data_out.mean().item()))
+    ipf.accelerator.print("Out std: {0}".format(data_out.std().item()))
 
     return TensorDataset(data_x, data_y, data_out, data_steps)

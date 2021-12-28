@@ -512,7 +512,7 @@ class IPFSequential(IPFBase):
         
         new_dl = None
 
-        self.net[forward_or_backward] = self.accelerator.unwrap(self.net[forward_or_backward])
+        self.net[forward_or_backward] = self.accelerator.unwrap_model(self.net[forward_or_backward])
         self.clear()
 
     def train(self):

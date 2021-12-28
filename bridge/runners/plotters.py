@@ -105,59 +105,59 @@ class Plotter(object):
 
         make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
 
-        if x_start[0].shape == y_start[0].shape:
-            npts = 250
-            x_start = x_start.reshape(x_start.shape[0], -1)
-            y_start = y_start.reshape(y_start.shape[0], -1)
-
-            if n == 0 and fb == "f":
-                plt.clf()
-                filename = 'original_density.png'
-                filename = os.path.join(self.im_dir, filename)
-
-                fig = plt.figure(figsize=(5*len(dims), 4))
-                for d in range(len(dims)):
-                    dim = dims[d]
-                    x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
-                    y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
-                    ax = plt.subplot(1, len(dims), d+1)
-                    kde_yx = kde.gaussian_kde([y_start[:, dim], x_start[:, dim]])
-                    xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
-                    zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
-                    plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
-                    plt.xlabel("y")
-                    plt.ylabel("x")
-                plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
-                plt.close()
-
-            name_gif = name + '_density'
-            plot_paths_reg = []
-            for k in range(self.num_steps):
-                if k % freq == 0:
-                    filename = name_gif + '_' + str(k) + '.png'
-                    filename = os.path.join(im_dir, filename)
-                    plt.clf()
-                    fig = plt.figure(figsize=(5*len(dims), 4))
-                    if n is not None:
-                        str_title = 'IPFP iteration: ' + str(n)
-                        plt.title(str_title)
-
-                    for d in range(len(dims)):
-                        dim = dims[d]
-                        x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
-                        y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
-                        ax = plt.subplot(1, len(dims), d+1)
-                        kde_yx = kde.gaussian_kde([y_start[:, dim], x_tot[k, :, dim]])
-                        xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
-                        zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
-                        plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
-                        plt.xlabel("y")
-                        plt.ylabel("x")
-                    plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
-                    plt.close()
-                    plot_paths_reg.append(filename)
-
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+        # if x_start[0].shape == y_start[0].shape:
+        #     npts = 250
+        #     x_start = x_start.reshape(x_start.shape[0], -1)
+        #     y_start = y_start.reshape(y_start.shape[0], -1)
+        #
+        #     if n == 0 and fb == "f":
+        #         plt.clf()
+        #         filename = 'original_density.png'
+        #         filename = os.path.join(self.im_dir, filename)
+        #
+        #         fig = plt.figure(figsize=(5*len(dims), 4))
+        #         for d in range(len(dims)):
+        #             dim = dims[d]
+        #             x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+        #             y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
+        #             ax = plt.subplot(1, len(dims), d+1)
+        #             kde_yx = kde.gaussian_kde([y_start[:, dim], x_start[:, dim]])
+        #             xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
+        #             zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
+        #             plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+        #             plt.xlabel("y")
+        #             plt.ylabel("x")
+        #         plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+        #         plt.close()
+        #
+        #     name_gif = name + '_density'
+        #     plot_paths_reg = []
+        #     for k in range(self.num_steps):
+        #         if k % freq == 0:
+        #             filename = name_gif + '_' + str(k) + '.png'
+        #             filename = os.path.join(im_dir, filename)
+        #             plt.clf()
+        #             fig = plt.figure(figsize=(5*len(dims), 4))
+        #             if n is not None:
+        #                 str_title = 'IPFP iteration: ' + str(n)
+        #                 plt.title(str_title)
+        #
+        #             for d in range(len(dims)):
+        #                 dim = dims[d]
+        #                 x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+        #                 y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
+        #                 ax = plt.subplot(1, len(dims), d+1)
+        #                 kde_yx = kde.gaussian_kde([y_start[:, dim], x_tot[k, :, dim]])
+        #                 xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
+        #                 zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
+        #                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+        #                 plt.xlabel("y")
+        #                 plt.ylabel("x")
+        #             plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+        #             plt.close()
+        #             plot_paths_reg.append(filename)
+        #
+        #     make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         pass

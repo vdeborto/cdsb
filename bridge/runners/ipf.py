@@ -238,10 +238,9 @@ class IPFBase:
         self.shape_x = shape_x
         self.shape_y = shape_y
 
-        self.langevin = Langevin(self.num_steps, shape_x, shape_y, self.gammas,
-                                 self.time_sampler, device = self.device,
+        self.langevin = Langevin(self.num_steps, shape_x, shape_y, self.gammas, self.time_sampler,
                                  mean_final=self.mean_final, var_final=self.var_final,
-                                 mean_match=self.args.mean_match)
+                                 mean_match=self.args.mean_match, out_scale=self.args.langevin_scale)
 
     def new_cacheloader(self, forward_or_backward, n, use_ema=True):
         sample_direction = 'f' if forward_or_backward == 'b' else 'b'

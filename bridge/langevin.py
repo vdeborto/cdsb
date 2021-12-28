@@ -15,8 +15,8 @@ def ornstein_ulhenbeck(x, gradx, gamma):
 
 class Langevin(torch.nn.Module):
 
-    def __init__(self, num_steps, shape_x, shape_y, gammas, time_sampler, device = None, 
-                 mean_final=torch.tensor([0.,0.]), var_final=torch.tensor([.5, .5]), mean_match=True):
+    def __init__(self, num_steps, shape_x, shape_y, gammas, time_sampler,
+                 mean_final=torch.tensor([0.,0.]), var_final=torch.tensor([.5, .5]), mean_match=True, out_scale=1):
         super().__init__()
 
         self.mean_match = mean_match
@@ -32,14 +32,12 @@ class Langevin(torch.nn.Module):
         #     gammas_vec[k] = gammas[k]
         # self.gammas_vec = gammas_vec
 
-        if device is not None:
-            self.device = device
-        else:
-            self.device = gammas.device
+        self.device = gammas.device
 
         self.steps = torch.arange(self.num_steps).to(self.device)
         self.time = torch.cumsum(self.gammas, 0).to(self.device)
         self.time_sampler = time_sampler
+        self.out_scale = out_scale
             
 
     def record_init_langevin(self, init_samples_x, init_samples_y, mean_final=None, var_final=None):
@@ -70,7 +68,11 @@ class Langevin(torch.nn.Module):
             t_new = x + gamma * gradx
             x_tot[:, k, :] = x
             y_tot[:, k, :] = y
-            out[:, k, :] = (t_old - t_new) #/ (2 * gamma)
+            if self.mean_match:
+                out[:, k, :] = (t_old - t_new) #/ (2 * gamma)
+            else:
+                out_scale = eval(self.out_scale).to(self.device) if isinstance(self.out_scale, str) else self.out_scale
+                out[:, k, :] = (t_old - t_new) / out_scale
             
         return x_tot, y_tot, out, steps_expanded
 
@@ -104,19 +106,21 @@ class Langevin(torch.nn.Module):
                 out[:, k, :] = (t_old - t_new) 
         else:
             for k in range(num_iter):
-                gamma = self.gammas[k]    
-                t_old = x + net(x, y, steps[:, k, :])
+                gamma = self.gammas[k]
+                out_scale = eval(self.out_scale).to(self.device) if isinstance(self.out_scale, str) else self.out_scale
+
+                t_old = x + out_scale * net(x, y, steps[:, k, :])
                 
                 if sample & (k==num_iter-1):
                     x = t_old
                 else:
                     z = torch.randn(x.shape, device=x.device)
                     x = t_old + torch.sqrt(2 * gamma) * z
-                t_new = x + net(x, y, steps[:, k, :])
+                t_new = x + out_scale * net(x, y, steps[:, k, :])
                 
                 x_tot[:, k, :] = x
                 y_tot[:, k, :] = y
-                out[:, k, :] = (t_old - t_new) 
+                out[:, k, :] = (t_old - t_new) / out_scale
             
 
         return x_tot, y_tot, out, steps_expanded

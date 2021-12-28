@@ -11,7 +11,6 @@ defaults:
 name: ${Dataset}_${data.dataset}
 nosave: False
 
-
 # logging
 LOGGER: CSV # NEPTUNE, CSV, NONE
 CSV_log_dir: ./
@@ -25,6 +24,8 @@ mean_match: True
 paths:
   experiments_dir_name: experiments
   data_dir_name: data
+
+langevin_scale: 2*torch.sqrt(2*gamma)
 
 # checkpoint
 checkpoint_run: False

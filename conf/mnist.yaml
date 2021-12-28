@@ -25,10 +25,13 @@ paths:
   experiments_dir_name: experiments
   data_dir_name: data
 
+langevin_scale: 2*torch.sqrt(2*gamma)
+
 # checkpoint
 checkpoint_run: False
 checkpoint_it: 1
-checkpoint_pass: backward
-sample_checkpoint_f: None
-sample_checkpoint_b: None
-checkpoint_f: None
+checkpoint_pass: b  # b or f (skip b ipf run)
+sample_checkpoint_f: ""
+sample_checkpoint_b: ""
+checkpoint_f: ""
+checkpoint_b: ""

@@ -68,6 +68,7 @@ class Plotter(object):
 
         x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
         x_start = x_start.cpu().numpy()
+        y_start = y_start.cpu().numpy()
         if mean_final is not None:
             mean_final = mean_final.cpu().numpy() + np.zeros_like(x_start[:1])
         if var_final is not None:
@@ -106,8 +107,8 @@ class Plotter(object):
 
         if x_start[0].shape == y_start[0].shape:
             npts = 250
-            x_start = x_start.cpu().reshape(x_start.shape[0], -1).numpy()
-            y_start = y_start.cpu().reshape(y_start.shape[0], -1).numpy()
+            x_start = x_start.reshape(x_start.shape[0], -1)
+            y_start = y_start.reshape(y_start.shape[0], -1)
 
             if n == 0 and fb == "f":
                 plt.clf()

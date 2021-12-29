@@ -1,11 +1,10 @@
 import torch
-import os, sys
+import os, sys, warnings
 import torch.nn.functional as F
 import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
-from utils import WrappedDataLoader
-from .config_getters import get_models, get_optimizer, get_datasets, get_plotter, get_logger, get_tester
+from .config_getters import get_models, get_optimizer, get_plotter, get_logger
 import datetime
 from tqdm import tqdm
 from .ema import EMAHelper
@@ -14,9 +13,8 @@ import time
 import random
 import torch.autograd.profiler as profiler
 from ..data import CacheLoader
-from torch.utils.data import WeightedRandomSampler
+from torch.utils.data import TensorDataset
 from accelerate import Accelerator, DistributedType
-import time
 
 class IPFBase:
     def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None):
@@ -78,6 +76,17 @@ class IPFBase:
         # get data
         self.build_dataloaders()
 
+        self.npar = len(init_ds)
+        cache_epochs = (self.batch_size*self.args.cache_refresh_stride)/(self.cache_npar*self.args.num_cache_batches*self.num_steps)
+        data_epochs = (self.num_iter*self.cache_npar*self.args.num_cache_batches)/(self.npar*self.args.cache_refresh_stride)
+        self.accelerator.print("Cache epochs:", cache_epochs)
+        self.accelerator.print("Data epochs:", data_epochs)
+        if self.accelerator.is_main_process:
+            if cache_epochs < 1:
+                warnings.warn("Cache epochs < 1, increase batch_size, cache_refresh_stride, or decrease cache_npar, num_cache_batches, num_steps. ")
+            if data_epochs < 1:
+                warnings.warn("Data epochs < 1, increase num_iter, cache_npar, num_cache_batches, or decrease npar, cache_refresh_stride. ")
+
         # # checkpoint
         # date = str(datetime.datetime.now())[0:10]
         # self.name_all = date
@@ -94,8 +103,6 @@ class IPFBase:
 
         if self.accelerator.is_main_process:
             self.plotter = self.get_plotter()
-
-            self.tester = self.get_tester()
 
             ckpt_dir = './checkpoints/'
             os.makedirs(ckpt_dir, exist_ok=True)
@@ -207,25 +214,23 @@ class IPFBase:
 
         self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(self.init_ds))
         self.cache_npar = min(self.args.cache_npar, len(self.init_ds))
+        self.test_batch_size = min(self.save_npar, self.args.test_batch_size)
 
         self.cache_init_dl = DataLoader(self.init_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
         self.cache_init_dl = self.accelerator.prepare(self.cache_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
 
-        if self.accelerator.is_main_process:
-            self.save_init_dl = DataLoader(self.init_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
-            self.save_init_dl = WrappedDataLoader(self.save_init_dl, lambda x, y: (x.to(self.device), y.to(self.device)))
-            self.save_init_dl = repeater(self.save_init_dl)
+        self.save_init_dl = DataLoader(TensorDataset(*self.init_ds[:self.save_npar]), batch_size=self.test_batch_size, **self.kwargs)
+        self.save_init_dl = self.accelerator.prepare(self.save_init_dl)
 
         if self.transfer:
             self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
             self.cache_final_dl = self.accelerator.prepare(self.cache_final_dl)
             self.cache_final_dl = repeater(self.cache_final_dl)
 
-            if self.accelerator.is_main_process:
-                self.save_final_dl = DataLoader(self.final_ds, batch_size=self.save_npar, shuffle=True, **self.kwargs)
-                self.save_final_dl = WrappedDataLoader(self.save_final_dl, lambda x, y: (x.to(self.device), y.to(self.device)))
-                self.save_final_dl = repeater(self.save_final_dl)
+            self.save_final_dl = DataLoader(self.final_ds, batch_size=self.test_batch_size, shuffle=True, **self.kwargs)
+            self.save_final_dl = self.accelerator.prepare(self.save_final_dl)
+            self.save_final_dl = repeater(self.save_final_dl)
         else:
             self.cache_final_dl = None
             self.save_final_dl = None
@@ -248,9 +253,11 @@ class IPFBase:
             sample_net = self.ema_helpers[sample_direction].ema_copy(self.net[sample_direction])
         else:
             sample_net = self.net[sample_direction]
-        
+
+        sample_net = self.accelerator.prepare(sample_net)
+        sample_net.eval()
+
         if forward_or_backward == 'b':
-            sample_net = self.accelerator.prepare(sample_net)
             new_ds = CacheLoader('b',
                                  sample_net,
                                  self.cache_init_dl,
@@ -260,7 +267,6 @@ class IPFBase:
                                  device='cpu' if self.args.cache_cpu else self.device)
 
         else:  # forward
-            sample_net = self.accelerator.prepare(sample_net)
             new_ds = CacheLoader('f',
                                  sample_net,
                                  self.cache_init_dl,
@@ -279,17 +285,15 @@ class IPFBase:
         pass
 
     def save_step(self, i, n, fb):
-        if self.accelerator.is_main_process:
-            if i % self.stride == 0 or i == self.num_iter:
+        if i % self.stride == 0 or i == self.num_iter:
+            if self.args.ema:
+                sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
+            else:
+                sample_net = self.net[fb]
 
-                if self.args.ema:
-                    sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
-                else:
-                    sample_net = self.net[fb]
-
+            if self.accelerator.is_main_process:
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-
                 torch.save(self.net[fb].state_dict(), name_net_ckpt)
 
                 if self.args.ema:
@@ -297,50 +301,19 @@ class IPFBase:
                     name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                     torch.save(sample_net.state_dict(), name_net_ckpt)
 
-                if not self.args.nosave:
-                    with torch.no_grad():
-                        self.set_seed(seed=0 + self.accelerator.process_index)
-                        batch_x, batch_y, init_batch_x, mean_final, var_final = self.sample_batch(self.save_init_dl, self.save_final_dl, fb)
-                        init_batch_y = batch_y
+            if not self.args.nosave:
+                sample_net = self.accelerator.prepare(sample_net)
+                sample_net.eval()
 
-                        x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
+                with torch.no_grad():
+                    self.set_seed(seed=0 + self.accelerator.process_index)
+                    test_metrics = self.plotter(sample_net, i, n, fb)
 
-                        shape_len = len(x_tot.shape)
-                        x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
-                        x_tot_plot = x_tot.detach()#.cpu().numpy()
-
-                        x_tot_cond = torch.zeros([0, *x_tot.shape])
-                        x_tot_cond_fwdbwd = torch.zeros([0, *x_tot.shape])
-
-                        if self.y_cond is not None and not self.cond_final and fb == 'b':
-                            for k in range(len(self.y_cond)):
-                                x_tot_c = self.backward_sample(batch_x, self.y_cond[k])
-                                x_tot_cond = torch.cat([x_tot_cond, x_tot_c.cpu().unsqueeze(0)], dim=0)
-
-                                x_tot_fwd, x_tot_c_fwdbwd = self.forward_backward_sample(init_batch_x, init_batch_y, self.y_cond[k], n, fb,
-                                                                                         return_fwd_tot=True)
-                                x_tot_cond_fwdbwd = torch.cat([x_tot_cond_fwdbwd, x_tot_c_fwdbwd.cpu().unsqueeze(0)], dim=0)
-
-                        test_metrics = self.tester(
-                            batch_x[:self.args.test_npar], batch_y[:self.args.test_npar], x_tot_plot[:, :self.args.test_npar],
-                            self.y_cond, x_tot_cond[:, :, :self.args.test_npar], init_batch_x[:self.args.test_npar],
-                            self.args.data.dataset, i, n, fb, mean_final=mean_final, var_final=var_final
-                        )
-                        test_metrics.update(self.tester.test_cond(self.y_cond, x_tot_cond_fwdbwd[:, :, :self.args.test_npar],
-                                                                  self.args.data.dataset, i, n, fb, tag='fwdbwd'))
+                    if self.accelerator.is_main_process:
                         test_metrics['T'] = self.T
                         self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
 
-                        self.plotter(batch_x[:self.args.plot_npar], batch_y[:self.args.plot_npar], x_tot_plot[:, :self.args.plot_npar],
-                                     self.y_cond, x_tot_cond[:, :, :self.args.plot_npar], init_batch_x[:self.args.plot_npar],
-                                     self.args.data.dataset, i, n, fb, mean_final=mean_final, var_final=var_final)
-                        if self.y_cond is not None and not self.cond_final and fb == 'b':
-                            self.plotter.plot_sequence_cond_fwdbwd(init_batch_x[:self.args.plot_npar], init_batch_y[:self.args.plot_npar],
-                                                                   x_tot_fwd[:, :self.args.plot_npar],
-                                                                   self.y_cond, x_tot_cond_fwdbwd[:, :self.args.plot_npar],
-                                                                   self.args.data.dataset, i, n, fb)
-
-    def sample_batch(self, init_dl, final_dl, fb):
+    def sample_batch(self, init_dl, final_dl, fb, y_c=None):
         mean_final = self.mean_final
         std_final = self.std_final
 
@@ -369,6 +342,9 @@ class IPFBase:
             init_batch = next(init_dl)
             init_batch_x = init_batch[0]
             batch_y = init_batch[1]
+            if y_c is not None:
+                batch_y = y_c.to(batch_y.device) + torch.zeros_like(batch_y)
+                init_batch_x = None
             mean, std = self.final_cond_model(batch_y)
             batch_x = mean + std * torch.randn_like(init_batch_x)
 
@@ -390,56 +366,63 @@ class IPFBase:
         var_final = std_final ** 2
         return batch_x, batch_y, init_batch_x, mean_final, var_final
 
-    def backward_sample(self, final_batch_x, y_c, fix_seed=False):
-        if self.accelerator.is_main_process:
-            if self.args.ema:
-                sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
-            else:
-                sample_net = self.net['b']
-
-            with torch.no_grad():
-                # self.set_seed(seed=0 + self.accelerator.process_index)
-                final_batch_x = final_batch_x.to(self.device)
-                y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
-                x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True)
-
-                x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
-
-        return x_tot_c
-
-    def forward_sample(self, init_batch_x, init_batch_y, n, fb, fix_seed=False):
-        if self.accelerator.is_main_process:
+    def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None):
+        if sample_net is None:
             if self.args.ema:
                 sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
             else:
                 sample_net = self.net['f']
 
-            with torch.no_grad():
-                # self.set_seed(seed=0 + self.accelerator.process_index)
-                init_batch_x = init_batch_x.to(self.device)
-                init_batch_y = init_batch_y.to(self.device)
-                if n == 1 and fb == "b":
-                    assert not self.cond_final
-                    mean_final = self.mean_final.to(self.device)
-                    var_final = self.var_final.to(self.device)
+            sample_net = self.accelerator.prepare(sample_net)
+        sample_net.eval()
 
-                    x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y,
-                                                                        mean_final=mean_final, var_final=var_final)
-                else:
-                    x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+        with torch.no_grad():
+            # self.set_seed(seed=0 + self.accelerator.process_index)
+            final_batch_x = final_batch_x.to(self.device)
+            y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
+            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True)
 
-            x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
+            x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
+
+        return x_tot_c
+
+    def forward_sample(self, init_batch_x, init_batch_y, n, fb, fix_seed=False, sample_net=None):
+        if sample_net is None:
+            if self.args.ema:
+                sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
+            else:
+                sample_net = self.net['f']
+
+            sample_net = self.accelerator.prepare(sample_net)
+        sample_net.eval()
+
+        with torch.no_grad():
+            # self.set_seed(seed=0 + self.accelerator.process_index)
+            init_batch_x = init_batch_x.to(self.device)
+            init_batch_y = init_batch_y.to(self.device)
+            if n == 1 and fb == "b":
+                assert not self.cond_final
+                mean_final = self.mean_final.to(self.device)
+                var_final = self.var_final.to(self.device)
+
+                x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y,
+                                                                    mean_final=mean_final, var_final=var_final)
+            else:
+                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+
+        x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
 
         return x_tot
 
-    def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fb, fix_seed=False, return_fwd_tot=False):
-        if self.accelerator.is_main_process:
-            assert not self.cond_final
-            x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fb, fix_seed=fix_seed)
-            final_batch_x = x_tot[-1]
-            if return_fwd_tot:
-                return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed)
-            return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed)
+    def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fb, fix_seed=False, return_fwd_tot=False,
+                                sample_net_f=None, sample_net_b=None):
+        assert not self.cond_final
+
+        x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fb, fix_seed=fix_seed, sample_net=sample_net_f)
+        final_batch_x = x_tot[-1]
+        if return_fwd_tot:
+            return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
+        return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
@@ -465,6 +448,8 @@ class IPFSequential(IPFBase):
         self.accelerate(forward_or_backward)
         
         for i in tqdm(range(1, self.num_iter+1)):
+            self.net[forward_or_backward].train()
+
             self.set_seed(seed=n*self.num_iter+i)
 
             x, y, out, steps_expanded = next(new_dl)
@@ -516,42 +501,23 @@ class IPFSequential(IPFBase):
 
     def train(self):
         # INITIAL FORWARD PASS
-        if self.accelerator.is_main_process:
-            with torch.no_grad():
-                self.set_seed(seed=0 + self.accelerator.process_index)
-                batch_x, batch_y, _, mean_final, var_final = self.sample_batch(self.save_init_dl, None, "f")
-                x_tot, _, _, _ = self.langevin.record_init_langevin(batch_x, batch_y,
-                                                                    mean_final=mean_final, var_final=var_final)
-                shape_len = len(x_tot.shape)
-                x_tot = x_tot.permute(1, 0, *list(range(2, shape_len)))
-                x_tot_plot = x_tot.detach()#.cpu().numpy()
+        with torch.no_grad():
+            self.set_seed(seed=0 + self.accelerator.process_index)
+            test_metrics = self.plotter(None, 0, 0, 'f')
 
-                test_metrics = self.tester(
-                    batch_x[:self.args.test_npar], batch_y[:self.args.test_npar],
-                    x_tot_plot[:, :self.args.test_npar], None, None, batch_x[:self.args.test_npar],
-                    self.args.data.dataset, 0, 0, 'f', mean_final=mean_final, var_final=var_final
-                )
+            if self.accelerator.is_main_process:
                 test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=0)
 
-                self.plotter(
-                    batch_x[:self.args.plot_npar], batch_y[:self.args.plot_npar],
-                    x_tot_plot[:, :self.args.plot_npar], None, None, batch_x[:self.args.plot_npar],
-                    self.args.data.dataset, 0, 0, 'f', mean_final=mean_final, var_final=var_final
-                )
-
-            x_tot_plot = None
-            x_tot = None
-            torch.cuda.empty_cache()
             
         for n in range(self.checkpoint_it, self.n_ipf+1):
             
             self.accelerator.print('IPF iteration: ' + str(n) + '/' + str(self.n_ipf))
             # BACKWARD OPTIMISATION
             if (self.checkpoint_pass == 'f') and (n == self.checkpoint_it):
-                self.ipf_step('f',n)
+                self.ipf_step('f', n)
             else:
-                self.ipf_step('b',n)
-                self.ipf_step('f',n)
+                self.ipf_step('b', n)
+                self.ipf_step('f', n)
 
     

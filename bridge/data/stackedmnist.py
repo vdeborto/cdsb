@@ -11,7 +11,7 @@ from .utils import save_image
 
 
 class Stacked_MNIST(Dataset):
-    def __init__(self, root="./dataset", load=True, source_root=None, imageSize=28,
+    def __init__(self, args, root="./dataset", load=True, source_root=None, imageSize=28,
                  train=True, num_channels=3, device='cpu'):  # load=True means loading the dataset from existed files.
         super(Stacked_MNIST, self).__init__()
         self.num_channels = min(3,num_channels)
@@ -34,6 +34,11 @@ class Stacked_MNIST(Dataset):
             dataloader_G = DataLoader(source_data, batch_size=100, shuffle=True)
             dataloader_B = DataLoader(source_data, batch_size=100, shuffle=True)
 
+            im_dir = root + '/im'
+            if os.path.exists(im_dir):
+                shutil.rmtree(im_dir)
+            os.makedirs(im_dir)
+
             for (xR, yR), (xG, yG), (xB, yB) in tqdm(zip(dataloader_R, dataloader_G, dataloader_B)):
                 x = torch.cat([xR, xG, xB][-self.num_channels:], dim=1)
                 y = (100 * yR + 10 * yG + yB) % 10**self.num_channels
@@ -45,7 +50,12 @@ class Stacked_MNIST(Dataset):
             torch.save(self.data, os.path.join(root, "data.pt"))
             torch.save(self.targets, os.path.join(root, "targets.pt"))
             save_image(x, os.path.join(root, "data_x.png"), nrow=10)
-            
+
+            for k in range(args.test_npar):
+                im = self.data[k]
+                filename = root + '/im/{:05}.jpg'.format(k)
+                save_image(im, filename)
+
         self.data = self.data#.to(device)
         self.targets = self.targets#.to(device)
         
@@ -61,7 +71,7 @@ class Stacked_MNIST(Dataset):
 class Cond_Stacked_MNIST(Stacked_MNIST):
     def __init__(self, args, root="./dataset", load=True, source_root=None, imageSize=28,
                  train=True, num_channels=3, device='cpu'):
-        super().__init__(root, load, source_root, imageSize, train, num_channels, device)
+        super().__init__(args, root, load, source_root, imageSize, train, num_channels, device)
         if args.task == 'SuperRes':
             factor = args.factor
             downsample_kernel = torch.ones(num_channels, 1, factor, factor)
@@ -69,6 +79,7 @@ class Cond_Stacked_MNIST(Stacked_MNIST):
 
             self.data_y = torch.nn.functional.conv2d(self.data, downsample_kernel, stride=factor,
                                                      groups=num_channels)
+            self.data_y = torch.nn.functional.interpolate(self.data_y, (imageSize, imageSize))
 
             save_image(self.data_y[-100:], os.path.join(root, "data_y.png"), nrow=10)
         else:

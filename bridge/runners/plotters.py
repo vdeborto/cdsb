@@ -1,15 +1,16 @@
+import time
 import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
 import matplotlib
 import torch
 import torchvision.utils as vutils
+from . import repeater
 from ..data.utils import save_image
 from PIL import Image
 import os, sys
 matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
-
 
 
 DPI = 200
@@ -27,7 +28,7 @@ def make_gif(plot_paths, output_directory='./gif', gif_name='gif'):
 
 class Plotter(object):
 
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
+    def __init__(self, ipf, args, im_dir = './im', gif_dir='./gif'):
         os.makedirs(im_dir, exist_ok=True)
         os.makedirs(gif_dir, exist_ok=True)
 
@@ -46,14 +47,181 @@ class Plotter(object):
         os.makedirs(self.im_dir, exist_ok=True)
         os.makedirs(self.gif_dir, exist_ok=True)
 
-        self.num_steps = num_steps
-        self.gammas = gammas
+        self.ipf = ipf
+        self.args = args
 
-    def __call__(self, x_start, y_start, x_tot, y_cond, x_tot_cond, x_init, data, i, n, fb, x_init_cond=None,
-                 mean_final=None, var_final=None):
-        self.plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb,
-                                 mean_final=mean_final, var_final=var_final)
-        self.plot_sequence_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond)
+        self.dataset = self.args.data.dataset
+        self.num_steps = self.args.num_steps
+
+    def __call__(self, sample_net, i, n, fb):
+        out = {}
+
+        x_start, y_start, x_tot, x_init, mean_final, var_final, time_joint = self.generate_sequence_joint(sample_net, i, n, fb)
+        if self.ipf.accelerator.is_main_process:
+            if self.args.cond_final:
+                self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
+                                         x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
+                                         self.dataset, i, n, fb,
+                                         mean_final=mean_final[:self.args.plot_npar], var_final=var_final[:self.args.plot_npar])
+                out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
+                                           x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
+                                           self.dataset, i, n, fb,
+                                           mean_final=mean_final[:self.args.test_npar], var_final=var_final[:self.args.test_npar]))
+            else:
+                self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
+                                         x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
+                                         self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final)
+                out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
+                                           x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
+                                           self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final))
+
+        if n > 0 and self.ipf.y_cond is not None:
+            if fb == 'b':
+                x_start_cond = []
+                x_tot_cond = []
+                time_cond = []
+                for y_c in self.ipf.y_cond:
+                    x_start, x_tot_c, time_c = self.generate_sequence_cond(y_c, sample_net, i, n, fb)
+                    if self.ipf.accelerator.is_main_process:
+                        x_start_cond.append(x_start)
+                        x_tot_cond.append(x_tot_c)
+                        time_cond.append(time_c)
+
+                if self.ipf.accelerator.is_main_process:
+                    x_start_cond = torch.stack(x_start_cond, dim=0)
+                    x_tot_cond = torch.stack(x_tot_cond, dim=0)
+                    self.plot_sequence_cond(x_start_cond[:, :self.args.plot_npar], self.ipf.y_cond, x_tot_cond[:, :, :self.args.plot_npar],
+                                            self.dataset, i, n, fb, x_init_cond=None)
+                    out.update(self.test_cond(x_start_cond[:, :self.args.test_npar], self.ipf.y_cond, x_tot_cond[:, :, :self.args.test_npar],
+                                              self.dataset, i, n, fb, x_init_cond=None))
+
+            if not self.args.cond_final:
+                x_init_cond = []
+                y_init_cond = []
+                x_tot_fwd_cond = []
+                x_tot_fwdbwd_cond = []
+                time_cond = []
+                for y_c in self.ipf.y_cond:
+                    x_init, y_init, x_tot_fwd, x_tot_fwdbwd_c, time_c = self.generate_sequence_cond_fwdbwd(y_c, sample_net, i, n, fb)
+                    if self.ipf.accelerator.is_main_process:
+                        x_init_cond.append(x_init)
+                        y_init_cond.append(y_init)
+                        x_tot_fwd_cond.append(x_tot_fwd)
+                        x_tot_fwdbwd_cond.append(x_tot_fwdbwd_c)
+                        time_cond.append(time_c)
+
+                if self.ipf.accelerator.is_main_process:
+                    x_init_cond = torch.stack(x_init_cond, dim=0)
+                    y_init_cond = torch.stack(y_init_cond, dim=0)
+                    x_tot_fwd_cond = torch.stack(x_tot_fwd_cond, dim=0)
+                    x_tot_fwdbwd_cond = torch.stack(x_tot_fwdbwd_cond, dim=0)
+                    self.plot_sequence_cond_fwdbwd(x_init_cond[:, :self.args.plot_npar], y_init_cond[:, :self.args.plot_npar],
+                                                   x_tot_fwd_cond[:, :, :self.args.plot_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.plot_npar],
+                                                   self.dataset, i, n, fb, x_init_cond=None)
+                    out.update(self.test_cond(x_tot_fwd_cond[:, -1, :self.args.test_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.test_npar],
+                                              self.dataset, i, n, fb, x_init_cond=None))
+
+        torch.cuda.empty_cache()
+        return out
+
+    def generate_sequence_joint(self, sample_net, i, n, fb):
+        iter_save_init_dl = iter(self.ipf.save_init_dl)
+
+        start = time.time()
+        all_batch_x = []
+        all_batch_y = []
+        all_x_tot = []
+        all_init_batch_x = []
+        all_mean_final = []
+        all_var_final = []
+
+        while True:
+            try:
+                batch_x, batch_y, init_batch_x, mean_final, var_final = self.ipf.sample_batch(iter_save_init_dl, self.ipf.save_final_dl, fb)
+
+                if n == 0:
+                    assert fb == 'f'
+                    x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
+                else:
+                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
+
+                gather_batch_x = self.ipf.accelerator.gather(batch_x)
+                gather_batch_y = self.ipf.accelerator.gather(batch_y)
+                gather_x_tot = self.ipf.accelerator.gather(x_tot)
+                gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
+
+                if self.args.cond_final:
+                    gather_mean_final = self.ipf.accelerator.gather(mean_final)
+                    gather_var_final = self.ipf.accelerator.gather(var_final)
+
+                if self.ipf.accelerator.is_main_process:
+                    all_batch_x.append(gather_batch_x.cpu())
+                    all_batch_y.append(gather_batch_y.cpu())
+                    all_x_tot.append(gather_x_tot.cpu())
+                    all_init_batch_x.append(gather_init_batch_x.cpu())
+                    if self.args.cond_final:
+                        all_mean_final.append(gather_mean_final.cpu())
+                        all_var_final.append(gather_var_final.cpu())
+
+            except StopIteration:
+                break
+
+        if self.ipf.accelerator.is_main_process:
+            all_batch_x = torch.cat(all_batch_x, dim=0)
+            all_batch_y = torch.cat(all_batch_y, dim=0)
+            all_x_tot = torch.cat(all_x_tot, dim=0)
+            all_init_batch_x = torch.cat(all_init_batch_x, dim=0)
+
+            shape_len = len(all_x_tot.shape)
+            all_x_tot = all_x_tot.permute(1, 0, *list(range(2, shape_len)))
+
+            if self.args.cond_final:
+                all_mean_final = torch.cat(all_mean_final, dim=0)
+                all_var_final = torch.cat(all_var_final, dim=0)
+            else:
+                all_mean_final = self.ipf.mean_final.cpu()
+                all_var_final = self.ipf.var_final.cpu()
+
+        stop = time.time()
+        return all_batch_x, all_batch_y, all_x_tot, all_init_batch_x, all_mean_final, all_var_final, stop-start
+
+    def generate_sequence_cond(self, y_c, sample_net, i, n, fb):
+        if y_c is not None and fb == 'b':
+            save_init_dl = repeater(self.ipf.save_init_dl)
+            start = time.time()
+
+            batch_x, _, _, _, _ = self.ipf.sample_batch(save_init_dl, self.ipf.save_final_dl, fb, y_c=y_c)
+            x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net)
+
+            gather_batch_x = self.ipf.accelerator.gather(batch_x).cpu()
+            gather_x_tot_c = self.ipf.accelerator.gather(x_tot_c).cpu()
+
+            stop = time.time()
+            return gather_batch_x, gather_x_tot_c, stop-start
+
+    def generate_sequence_cond_fwdbwd(self, y_c, sample_net, i, n, fb):
+        if y_c is not None and not self.args.cond_final:
+            save_init_dl = repeater(self.ipf.save_init_dl)
+            start = time.time()
+
+            batch_x, batch_y, init_batch_x, _, _ = self.ipf.sample_batch(save_init_dl, self.ipf.save_final_dl, fb)
+            init_batch_y = batch_y
+
+            if fb == 'f':
+                x_tot_fwd, x_tot_fwdbwd_c = self.ipf.forward_backward_sample(init_batch_x, init_batch_y, y_c, n, fb,
+                                                                             return_fwd_tot=True, sample_net_f=sample_net)
+            elif fb == 'b':
+                x_tot_fwd, x_tot_fwdbwd_c = self.ipf.forward_backward_sample(init_batch_x, init_batch_y, y_c, n, fb,
+                                                                             return_fwd_tot=True, sample_net_b=sample_net)
+
+
+            gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x).cpu()
+            gather_init_batch_y = self.ipf.accelerator.gather(init_batch_y).cpu()
+            gather_x_tot_fwd = self.ipf.accelerator.gather(x_tot_fwd).cpu()
+            gather_x_tot_fwdbwd_c = self.ipf.accelerator.gather(x_tot_fwdbwd_c).cpu()
+
+            stop = time.time()
+            return gather_init_batch_x, gather_init_batch_y, gather_x_tot_fwd, gather_x_tot_fwdbwd_c, stop-start
 
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
                             mean_final=None, var_final=None):
@@ -92,12 +260,11 @@ class Plotter(object):
                     x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
                     ax = plt.subplot(1, len(dims), d+1)
                     plt.hist(x_tot[k, :, dim], bins=50, density=True, alpha=0.5)
-                    if mean_final is not None and var_final is not None and fb == 'f':
-                        if mean_final.shape[0] == 1 and var_final.shape[0] == 1:
-                            mu = mean_final.reshape([-1])[dim]
-                            sig = np.sqrt(var_final.reshape([-1])[dim])
-                            x_lin = np.linspace(x_min, x_max, 250)
-                            plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
+                    if mean_final is not None and var_final is not None and fb == 'f' and not self.args.cond_final:
+                        mu = mean_final.reshape([-1])[dim]
+                        sig = np.sqrt(var_final.reshape([-1])[dim])
+                        x_lin = np.linspace(x_min, x_max, 250)
+                        plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
                     ax.set_xlim(x_min, x_max)
                 plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
                 plt.close()
@@ -166,14 +333,36 @@ class Plotter(object):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         pass
 
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+                   mean_final=None, var_final=None):
+        x_last = x_tot[-1]
+
+        x_var_last = torch.var(x_last, dim=0).mean().item()
+        x_var_start = torch.var(x_start, dim=0).mean().item()
+        x_mean_last = torch.mean(x_last).item()
+        x_mean_start = torch.mean(x_start).item()
+
+        out = {'FB': fb,
+               'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
+               'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
+
+        if mean_final is not None:
+            x_mse_last = torch.mean((x_last - mean_final) ** 2)
+            x_mse_start = torch.mean((x_start - mean_final) ** 2)
+            out.update({"x_mse_start": x_mse_start, "x_mse_last": x_mse_last})
+
+        return out
+
+    def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
+        return {}
+
 
 class ImPlotter(Plotter):
 
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif', plot_level=3):
-        super().__init__(num_steps, gammas, im_dir, gif_dir)
+    def __init__(self, ipf, args, im_dir = './im', gif_dir='./gif'):
+        super().__init__(ipf, args, im_dir=im_dir, gif_dir=gif_dir)
         self.num_plots = 100
-        # self.num_digits = 20
-        self.plot_level = plot_level
+        self.plot_level = self.args.plot_level
 
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
                             mean_final=None, var_final=None):
@@ -212,37 +401,6 @@ class ImPlotter(Plotter):
                         save_image(x_tot[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
-
-
-# class TwoDPlotter(Plotter):
-#
-#     def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
-#
-#         if not os.path.isdir(im_dir):
-#             os.mkdir(im_dir)
-#         if not os.path.isdir(gif_dir):
-#             os.mkdir(gif_dir)
-#
-#         self.im_dir = im_dir
-#         self.gif_dir = gif_dir
-#
-#         self.num_steps = num_steps
-#         self.gammas = gammas
-#
-#     def plot(self, x_start, x_tot, i, n, forward_or_backward):
-#         fb = forward_or_backward
-#         ipf_it = n
-#         x_tot = x_tot.cpu().numpy()
-#         name = str(i) + '_' + fb +'_' + str(n) + '_'
-#
-#         save_sequence(num_steps=self.num_steps, x=x_tot, name=name,
-#                       xlim=(-15,15), ylim=(-15,15), ipf_it=ipf_it,
-#                       freq=self.num_steps//min(self.num_steps,50),
-#                       im_dir=self.im_dir, gif_dir=self.gif_dir)
-#
-#
-#     def __call__(self, x_start, x_tot, i, n, forward_or_backward):
-#         self.plot(x_start, x_tot, i, n, forward_or_backward)
 
 
 class OneDCondPlotter(Plotter):
@@ -387,7 +545,7 @@ class OneDCondPlotter(Plotter):
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
-        self.plot_sequence_cond(x_tot_fwd[-1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
 
 class FiveDCondPlotter(Plotter):
@@ -480,24 +638,10 @@ class FiveDCondPlotter(Plotter):
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
-        self.plot_sequence_cond(x_tot_fwd[-1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
 
 class BiochemicalPlotter(Plotter):
-
-    def __init__(self, num_steps, gammas, im_dir = './im', gif_dir='./gif'):
-
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
-        if not os.path.isdir(gif_dir):
-            os.mkdir(gif_dir)
-
-        self.im_dir = im_dir
-        self.gif_dir = gif_dir
-
-        self.num_steps = num_steps
-        self.gammas = gammas
-
     def plot(self, x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
         fb = forward_or_backward
         ipf_it = n
@@ -533,9 +677,9 @@ class BiochemicalPlotter(Plotter):
                 if ipf_it is not None:
                     str_title = 'IPFP iteration: ' + str(ipf_it)
                     plt.title(str_title)
-                k = kde.gaussian_kde([x_tot[k, :, 0],x_tot[k, :, 1]])
+                kde_xy = kde.gaussian_kde([x_tot[k, :, 0],x_tot[k, :, 1]])
                 xi, yi = np.mgrid[xlim[0]:xlim[1]:npts*1j, ylim[0]:ylim[1]:npts*1j]
-                zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+                zi = kde_xy(np.vstack([xi.flatten(), yi.flatten()]))
                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)

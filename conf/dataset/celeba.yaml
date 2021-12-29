@@ -28,7 +28,6 @@ load: False
 
 # device
 device: cuda
-dataparallel: True
 num_workers: 8 
 pin_memory: False
 

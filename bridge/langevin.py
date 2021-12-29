@@ -18,10 +18,11 @@ class Langevin(torch.nn.Module):
     def __init__(self, num_steps, shape_x, shape_y, gammas, time_sampler,
                  mean_final=torch.tensor([0.,0.]), var_final=torch.tensor([.5, .5]), mean_match=True, out_scale=1):
         super().__init__()
+        self.device = gammas.device
 
         self.mean_match = mean_match
-        self.mean_final = mean_final
-        self.var_final = var_final
+        self.mean_final = mean_final.to(self.device)
+        self.var_final = var_final.to(self.device)
         
         self.num_steps = num_steps # num diffusion steps
         self.d_x = shape_x # dimension of object to diffuse
@@ -32,7 +33,6 @@ class Langevin(torch.nn.Module):
         #     gammas_vec[k] = gammas[k]
         # self.gammas_vec = gammas_vec
 
-        self.device = gammas.device
 
         self.steps = torch.arange(self.num_steps).to(self.device)
         self.time = torch.cumsum(self.gammas, 0).to(self.device)

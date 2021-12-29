@@ -7,9 +7,8 @@ from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
-from ..data.celeba  import CelebA
+from ..data.celeba import CelebA
 from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
-from .testers import Tester, OneDCondTester, FiveDCondTester
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -17,29 +16,20 @@ from .logger import CSVLogger, NeptuneLogger, Logger
 from torch.utils.data import DataLoader
 cmp = lambda x: transforms.Compose([*x])
 
+
 def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
-        return OneDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return OneDCondPlotter(runner, args)
     elif dataset_tag == DATASET_5D_COND:
-        return FiveDCondPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return FiveDCondPlotter(runner, args)
     elif dataset_tag == DATASET_BIOCHEMICAL:
-        return BiochemicalPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
-    # elif dataset_tag == DATASET_2D:
-    #     return TwoDPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return BiochemicalPlotter(runner, args)
     elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA]:
-        return ImPlotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return ImPlotter(runner, args)
     else:
-        return Plotter(num_steps=runner.num_steps, gammas=runner.langevin.gammas)
+        return Plotter(runner, args)
 
-def get_tester(runner, args):
-    dataset_tag = getattr(args, DATASET)
-    if dataset_tag == DATASET_1D_COND:
-        return OneDCondTester()
-    elif dataset_tag == DATASET_5D_COND:
-        return FiveDCondTester()
-    else:
-        return Tester()
 
 # Model
 #--------------------------------------------------------------------------------

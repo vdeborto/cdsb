@@ -100,9 +100,8 @@ class IPFBase:
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
 
-
+        self.plotter = self.get_plotter()
         if self.accelerator.is_main_process:
-            self.plotter = self.get_plotter()
 
             ckpt_dir = './checkpoints/'
             os.makedirs(ckpt_dir, exist_ok=True)
@@ -147,9 +146,6 @@ class IPFBase:
 
     def get_plotter(self):
         return get_plotter(self, self.args)
-
-    def get_tester(self):
-        return get_tester(self, self.args)
 
     def build_models(self, forward_or_backward=None):
         # running network

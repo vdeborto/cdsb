@@ -29,29 +29,30 @@ def make_gif(plot_paths, output_directory='./gif', gif_name='gif'):
 class Plotter(object):
 
     def __init__(self, ipf, args, im_dir = './im', gif_dir='./gif'):
-        os.makedirs(im_dir, exist_ok=True)
-        os.makedirs(gif_dir, exist_ok=True)
-
-        existing_versions = []
-        for d in os.listdir(im_dir):
-            if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
-                existing_versions.append(int(d.split("_")[1]))
-
-        if len(existing_versions) == 0:
-            version = 0
-        else:
-            version = max(existing_versions) + 1
-
-        self.im_dir = os.path.join(im_dir, f"version_{version}")
-        self.gif_dir = os.path.join(gif_dir, f"version_{version}")
-        os.makedirs(self.im_dir, exist_ok=True)
-        os.makedirs(self.gif_dir, exist_ok=True)
-
         self.ipf = ipf
         self.args = args
 
         self.dataset = self.args.data.dataset
         self.num_steps = self.args.num_steps
+
+        if self.ipf.accelerator.is_main_process:
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
+
+            existing_versions = []
+            for d in os.listdir(im_dir):
+                if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
+                    existing_versions.append(int(d.split("_")[1]))
+
+            if len(existing_versions) == 0:
+                version = 0
+            else:
+                version = max(existing_versions) + 1
+
+            self.im_dir = os.path.join(im_dir, f"version_{version}")
+            self.gif_dir = os.path.join(gif_dir, f"version_{version}")
+            os.makedirs(self.im_dir, exist_ok=True)
+            os.makedirs(self.gif_dir, exist_ok=True)
 
     def __call__(self, sample_net, i, n, fb):
         out = {}
@@ -333,8 +334,7 @@ class Plotter(object):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         pass
 
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
-                   mean_final=None, var_final=None):
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
         x_last = x_tot[-1]
 
         x_var_last = torch.var(x_last, dim=0).mean().item()
@@ -547,6 +547,24 @@ class OneDCondPlotter(Plotter):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
+        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, mean_final=mean_final, var_final=var_final)
+
+        if fb == 'b':
+            y_start = y_start.detach().cpu().numpy()
+            x_last = x_tot[-1].detach().cpu().numpy()
+            last_kde = lambda xy: kde.gaussian_kde([x_last[:, 0], y_start[:, 0]])(xy.T)
+
+            x_init = x_init.detach().cpu().numpy()
+            data_kde = lambda xy: kde.gaussian_kde([x_init[:, 0], y_start[:, 0]])(xy.T)
+
+            batch = np.hstack([x_init, y_start])
+
+            out["l2_pq_" + tag] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
+            out["kl_pq_" + tag] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
+
+        return out
+
 
 class FiveDCondPlotter(Plotter):
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
@@ -639,6 +657,35 @@ class FiveDCondPlotter(Plotter):
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+
+    def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
+        out = super().test_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag)
+
+        if fb == 'b' and y_cond is not None:
+            if data == 'type1':
+                true_x_test_mean = (y_cond[:, 0]**2 + torch.exp(y_cond[:, 1] + y_cond[:, 2]/3) + torch.sin(y_cond[:, 3] + y_cond[:, 4])).unsqueeze(1)
+                true_x_test_std = torch.ones(2000, 1)
+
+            elif data == 'type2':
+                true_x_test_mean = (y_cond[:, 0]**2 + torch.exp(y_cond[:, 1] + y_cond[:, 2]/3) + y_cond[:, 3] - y_cond[:, 4]).unsqueeze(1)
+                true_x_test_std = (0.5 + y_cond[:, 1]**2/2 + y_cond[:, 4]**2/2).unsqueeze(1)
+
+            elif data == 'type3':
+                mult = (5 + y_cond[:, 0]**2/3 + y_cond[:, 1]**2 + y_cond[:, 2]**2 + y_cond[:, 3] + y_cond[:, 4]).unsqueeze(1)
+                log_normal_mix_mean = 0.5 * np.exp(1 + 0.5**2/2) + 0.5 * np.exp(-1 + 0.5**2/2)
+                true_x_test_mean = mult * log_normal_mix_mean
+                true_x_test_std = mult * np.sqrt(0.5 * np.exp(2 + 2*0.5**2) + 0.5 * np.exp(-2 + 2*0.5**2) - log_normal_mix_mean**2)
+
+            elif data == 'type4':
+                true_x_test_mean = torch.zeros(2000, 1)
+                true_x_test_std = np.sqrt(y_cond[:, 0:1]**2 + 0.25**2)
+
+            x_tot_cond_std, x_tot_cond_mean = torch.std_mean(x_tot_cond[:, -1], 1)
+
+            out["mse_mean_" + tag] = torch.mean((x_tot_cond_mean - true_x_test_mean)**2)
+            out["mse_std_" + tag] = torch.mean((x_tot_cond_std - true_x_test_std)**2)
+
+        return out
 
 
 class BiochemicalPlotter(Plotter):

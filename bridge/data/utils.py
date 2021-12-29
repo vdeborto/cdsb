@@ -4,13 +4,18 @@ import torchvision.utils as vutils
 
 
 def save_image(tensor, fp, format=None, **kwargs):
-    normalized = tensor / 2 + 0.5
+    normalized = normalize_tensor(tensor)
     vutils.save_image(normalized, fp, format=format, **kwargs)
 
 
 def to_uint8_tensor(tensor):
-    normalized = tensor / 2 + 0.5
+    normalized = normalize_tensor(tensor)
     return normalized.mul(255).add_(0.5).clamp_(0, 255).to(torch.uint8)
+
+
+def normalize_tensor(tensor):
+    normalized = tensor / 2 + 0.5
+    return normalized
 
 
 def _list_image_files_recursively(data_dir):

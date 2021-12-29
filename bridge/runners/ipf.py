@@ -281,7 +281,7 @@ class IPFBase:
         pass
 
     def save_step(self, i, n, fb):
-        if i % self.stride == 0 or i == self.num_iter:
+        if i == 1 or i % self.stride == 0 or i == self.num_iter:
             if self.args.ema:
                 sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
             else:
@@ -472,7 +472,7 @@ class IPFSequential(IPFBase):
                 total_norm = 0.
 
 
-            if i == 1 or i % self.stride_log == 0:
+            if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
                 self.logger.log_metrics({'forward_or_backward': forward_or_backward,
                                          'loss': loss, 
                                          'grad_norm': total_norm}, step=i+self.num_iter*(n-1))

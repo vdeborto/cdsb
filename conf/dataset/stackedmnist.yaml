@@ -22,7 +22,7 @@ cond_final: False
 adaptive_mean: False
 final_adaptive: False
 mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
-var_final: 1 * torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
+var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
 load: True
 
 # device
@@ -31,7 +31,7 @@ num_workers: 4
 pin_memory: True
 
 # logging
-log_stride : 10
+log_stride: 10
 gif_stride: 5000
 plot_npar: 10000
 test_npar: 10000
@@ -44,7 +44,6 @@ ema: True
 ema_rate: 0.999
 grad_clipping: True
 grad_clip: 1.0
-n_ipf_init: 1
 batch_size: 128
 num_iter: 5000
 n_ipf: 20

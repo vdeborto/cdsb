@@ -7,7 +7,7 @@ import matplotlib
 import torch
 import torchvision.utils as vutils
 from . import repeater
-from ..data.utils import save_image
+from ..data.utils import save_image, to_uint8_tensor, normalize_tensor
 from PIL import Image
 from torchmetrics.image import PSNR, SSIM
 matplotlib.use('Agg')
@@ -396,12 +396,36 @@ class ImPlotter(Plotter):
                 plt.clf()
                 plot_paths = []
 
+                normalized_x_init = normalize_tensor(x_init[:self.num_plots_grid])
+
+                def save_image_with_metrics(batch_x, filename, **kwargs):
+                    plt.clf()
+
+                    normalized_batch_x = normalize_tensor(batch_x)
+                    uint8_batch_x = to_uint8_tensor(batch_x)
+                    uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
+                    plt.imshow(uint8_batch_x_grid)
+
+                    psnr = PSNR(data_range=1.)
+                    psnr = psnr(normalized_batch_x, normalized_x_init).item()
+                    ssim = SSIM(data_range=1.)
+                    ssim = ssim(normalized_batch_x, normalized_x_init).item()
+
+                    plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr, 2)) + '\n ssim ' + str(
+                        round(ssim, 2)))
+                    plt.savefig(filename)
+                    plt.close()
+
+                filename_grid_png = os.path.join(im_dir, 'im_grid_0.png')
+                plot_paths.append(filename_grid_png)
+                save_image_with_metrics(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+
                 for k in range(self.num_steps):
                     if k % freq == 0:
                         # save png
-                        filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))
+                        filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k+1))
                         plot_paths.append(filename_grid_png)
-                        save_image(x_tot_grid[k], filename_grid_png, nrow=10)
+                        save_image_with_metrics(x_tot_grid[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
 
@@ -421,10 +445,12 @@ class ImPlotter(Plotter):
 
         if fb == 'b':
             x_last = x_tot[-1]
-            psnr = PSNR(data_range=2.)
-            out["psnr"] = psnr(x_last, x_init)
-            ssim = SSIM(data_range=2.)
-            out["ssim"] = ssim(x_last, x_init)
+            normalized_x_init = normalize_tensor(x_init)
+            normalized_x_last = normalize_tensor(x_last)
+            psnr = PSNR(data_range=1.)
+            out["psnr"] = psnr(normalized_x_last, normalized_x_init)
+            ssim = SSIM(data_range=1.)
+            out["ssim"] = ssim(normalized_x_last, normalized_x_init)
 
         return out
 

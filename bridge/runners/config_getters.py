@@ -167,13 +167,10 @@ def get_datasets(args):
 
     if dataset_tag == DATASET_STACKEDMNIST:
         root = os.path.join(data_dir, 'mnist')
-        saved_file = os.path.join(root, "data.pt")
-        load = os.path.exists(saved_file) 
         load = args.load
         init_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
                                 train=True, num_channels = args.data.channels, 
-                                imageSize=args.data.image_size,
-                                device=args.device)
+                                imageSize=args.data.image_size)
 
     # EMNIST DATASET
 
@@ -184,8 +181,7 @@ def get_datasets(args):
         load = args.load
         init_ds = EMNIST(root, load=load, source_root=root,
                                 train=True, num_channels = args.data.channels,
-                                imageSize=args.data.image_size,
-                                device=args.device)
+                                imageSize=args.data.image_size)
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
 

@@ -1,4 +1,5 @@
 import time
+import os, sys
 import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
@@ -8,7 +9,7 @@ import torchvision.utils as vutils
 from . import repeater
 from ..data.utils import save_image
 from PIL import Image
-import os, sys
+from torchmetrics.image import PSNR, SSIM
 matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
 
@@ -361,7 +362,7 @@ class ImPlotter(Plotter):
 
     def __init__(self, ipf, args, im_dir = './im', gif_dir='./gif'):
         super().__init__(ipf, args, im_dir=im_dir, gif_dir=gif_dir)
-        self.num_plots = 100
+        self.num_plots_grid = 100
         self.plot_level = self.args.plot_level
 
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
@@ -371,8 +372,8 @@ class ImPlotter(Plotter):
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
 
-        if self.plot_level > 0:
-            x_tot = x_tot[:, :self.num_plots]
+        if self.plot_level >= 1:
+            x_tot_grid = x_tot[:, :self.num_plots_grid]
             name = str(i) + '_' + fb + '_' + str(n) + '_'
             im_dir = os.path.join(self.im_dir, name)
             name = name + tag
@@ -380,14 +381,16 @@ class ImPlotter(Plotter):
             if not os.path.isdir(im_dir):
                 os.mkdir(im_dir)
 
-            if self.plot_level > 0:
-                plt.clf()
-                filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
-                save_image(x_start, filename_grid_png, nrow=10)
-                filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
-                save_image(x_tot[-1], filename_grid_png, nrow=10)
-                filename_grid_png = os.path.join(im_dir, 'im_grid_data.png')
-                save_image(x_init, filename_grid_png, nrow=10)
+            # plot_level 1
+            plt.clf()
+            filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
+            save_image(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
+            save_image(x_tot_grid[-1], filename_grid_png, nrow=10)
+            filename_grid_png = os.path.join(im_dir, 'im_grid_data_x.png')
+            save_image(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
+            filename_grid_png = os.path.join(im_dir, 'im_grid_data_y.png')
+            save_image(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
 
             if self.plot_level >= 2:
                 plt.clf()
@@ -398,9 +401,32 @@ class ImPlotter(Plotter):
                         # save png
                         filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))
                         plot_paths.append(filename_grid_png)
-                        save_image(x_tot[k], filename_grid_png, nrow=10)
+                        save_image(x_tot_grid[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
+
+            if self.plot_level >= 3:
+                if fb == 'b':
+                    im_dir = os.path.join(im_dir, "im/")
+                    if not os.path.isdir(im_dir):
+                        os.mkdir(im_dir)
+
+                    for k in range(x_tot.shape[1]):
+                        plt.clf()
+                        filename_png = os.path.join(im_dir, '{:05}.png'.format(k))
+                        save_image(x_tot[-1, k], filename_png)
+
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
+        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, mean_final=mean_final, var_final=var_final)
+
+        if fb == 'b':
+            x_last = x_tot[-1]
+            psnr = PSNR(data_range=2.)
+            out["psnr"] = psnr(x_last, x_init)
+            ssim = SSIM(data_range=2.)
+            out["ssim"] = ssim(x_last, x_init)
+
+        return out
 
 
 class OneDCondPlotter(Plotter):

@@ -51,9 +51,9 @@ class Stacked_MNIST(Dataset):
             torch.save(self.targets, os.path.join(root, "targets.pt"))
             save_image(x, os.path.join(root, "data_x.png"), nrow=10)
 
-            for k in range(args.test_npar):
+            for k in range(len(self.data)):
                 im = self.data[k]
-                filename = root + '/im/{:05}.jpg'.format(k)
+                filename = root + '/im/{:05}.png'.format(k)
                 save_image(im, filename)
 
         self.data = self.data#.to(device)

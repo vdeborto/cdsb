@@ -23,7 +23,7 @@ def main():
 
     if args.data == 'mnist':
         root = os.path.join(args.data_dir, 'mnist')
-        Stacked_MNIST(root, 
+        Stacked_MNIST(None, root,
                       load=False, 
                       source_root=root,
                       train=True, 

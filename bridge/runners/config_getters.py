@@ -91,13 +91,30 @@ def get_models(args):
 
     return net_f, net_b
 
+
+def get_final_cond_model(args, init_ds):
+    assert args.cond_final
+
+    model_tag = args.cond_final_model.MODEL
+
+    if model_tag == 'BasicCond':
+        mean_scale = args.cond_final_model.mean_scale
+        if args.cond_final_model.adaptive_std:
+            data_x, data_y = init_ds[:len(init_ds)]
+            std = torch.std(data_x - data_y).item() * args.cond_final_model.std_scale
+        else:
+            std = args.cond_final_model.std_scale
+        print("Final cond model std:", std)
+        final_cond_model = BasicCondGaussian(mean_scale, std)
+
+    return final_cond_model
+
 # Optimizer
 #--------------------------------------------------------------------------------
+
 def get_optimizer(net, lr):
     return torch.optim.Adam(net.parameters(), lr=lr)
 
-def get_optimizers(net_f, net_b, lr):
-    return torch.optim.Adam(net_f.parameters(), lr=lr), torch.optim.Adam(net_b.parameters(), lr=lr)
 
 # Dataset
 #--------------------------------------------------------------------------------

@@ -17,6 +17,11 @@ factor: 4
 transfer: False
 Dataset_transfer: mnist
 cond_final: False
+cond_final_model:
+  MODEL: BasicCond
+  mean_scale: 1.
+  std_scale: 1.
+  adaptive_std: True
 
 
 adaptive_mean: False
@@ -37,7 +42,7 @@ plot_npar: 10000
 test_npar: 10000
 
 # training
-cache_npar: 1000
+cache_npar: 2000
 num_cache_batches: 1
 use_prev_net: False
 ema: True

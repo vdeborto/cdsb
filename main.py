@@ -5,7 +5,7 @@ import os, sys
 sys.path.append('..')
 
 from bridge.runners.ipf import IPFSequential
-from bridge.runners.config_getters import get_datasets
+from bridge.runners.config_getters import get_datasets, get_final_cond_model
 
 from accelerate import Accelerator
 
@@ -19,7 +19,11 @@ def main(args):
     
     init_ds, final_ds, mean_final, var_final = get_datasets(args)
 
-    ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator)
+    final_cond_model = None
+    if args.cond_final:
+        final_cond_model = get_final_cond_model(args, init_ds)
+
+    ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator, final_cond_model=final_cond_model)
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))

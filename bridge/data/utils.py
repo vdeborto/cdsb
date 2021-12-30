@@ -15,7 +15,7 @@ def to_uint8_tensor(tensor):
 
 def normalize_tensor(tensor):
     normalized = tensor / 2 + 0.5
-    return normalized
+    return normalized.clamp_(0, 1)
 
 
 def _list_image_files_recursively(data_dir):

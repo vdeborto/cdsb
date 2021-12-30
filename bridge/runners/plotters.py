@@ -238,17 +238,18 @@ class Plotter(object):
 
         x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
         x_start = x_start.cpu().numpy()
-        y_start = y_start.cpu().numpy()
         if mean_final is not None:
             mean_final = mean_final.cpu().numpy() + np.zeros_like(x_start[:1])
         if var_final is not None:
             var_final = var_final.cpu().numpy() + np.zeros_like(x_start[:1])
+        x_start = x_start.reshape([x_start.shape[0], -1])
+        x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
 
         name_gif = name + '_histogram'
         plot_paths_reg = []
         dims = np.sort(np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False))
-        for k in range(self.num_steps):
-            if k % freq == 0:
+        for k in range(self.num_steps+1):
+            if k % freq == 0 or k == self.num_steps:
                 filename = name_gif + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
                 plt.clf()
@@ -259,9 +260,9 @@ class Plotter(object):
 
                 for d in range(len(dims)):
                     dim = dims[d]
-                    x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
+                    x_min, x_max = np.min(x_start_tot[:, :, dim]), np.max(x_start_tot[:, :, dim])
                     ax = plt.subplot(1, len(dims), d+1)
-                    plt.hist(x_tot[k, :, dim], bins=50, density=True, alpha=0.5)
+                    plt.hist(x_start_tot[k, :, dim], bins=50, density=True, alpha=0.5)
                     if mean_final is not None and var_final is not None and fb == 'f' and not self.args.cond_final:
                         mu = mean_final.reshape([-1])[dim]
                         sig = np.sqrt(var_final.reshape([-1])[dim])
@@ -382,50 +383,45 @@ class ImPlotter(Plotter):
                 os.mkdir(im_dir)
 
             # plot_level 1
-            plt.clf()
+            normalized_x_init = normalize_tensor(x_init[:self.num_plots_grid])
+
+            def save_image_with_metrics(batch_x, filename, **kwargs):
+                plt.clf()
+
+                normalized_batch_x = normalize_tensor(batch_x)
+                uint8_batch_x = to_uint8_tensor(batch_x)
+                uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
+                plt.imshow(uint8_batch_x_grid)
+
+                psnr = PSNR(data_range=1.)
+                psnr = psnr(normalized_batch_x, normalized_x_init).item()
+                ssim = SSIM(data_range=1.)
+                ssim = ssim(normalized_batch_x, normalized_x_init).item()
+
+                plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr, 2)) + '\n ssim ' + str(
+                    round(ssim, 2)))
+                plt.axis('off')
+                plt.savefig(filename)
+                plt.close()
+
             filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
-            save_image(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            save_image_with_metrics(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
             filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
-            save_image(x_tot_grid[-1], filename_grid_png, nrow=10)
+            save_image_with_metrics(x_tot_grid[-1], filename_grid_png, nrow=10)
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_x.png')
-            save_image(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
+            save_image_with_metrics(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_y.png')
-            save_image(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            save_image_with_metrics(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
 
             if self.plot_level >= 2:
-                plt.clf()
                 plot_paths = []
-
-                normalized_x_init = normalize_tensor(x_init[:self.num_plots_grid])
-
-                def save_image_with_metrics(batch_x, filename, **kwargs):
-                    plt.clf()
-
-                    normalized_batch_x = normalize_tensor(batch_x)
-                    uint8_batch_x = to_uint8_tensor(batch_x)
-                    uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
-                    plt.imshow(uint8_batch_x_grid)
-
-                    psnr = PSNR(data_range=1.)
-                    psnr = psnr(normalized_batch_x, normalized_x_init).item()
-                    ssim = SSIM(data_range=1.)
-                    ssim = ssim(normalized_batch_x, normalized_x_init).item()
-
-                    plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr, 2)) + '\n ssim ' + str(
-                        round(ssim, 2)))
-                    plt.savefig(filename)
-                    plt.close()
-
-                filename_grid_png = os.path.join(im_dir, 'im_grid_0.png')
-                plot_paths.append(filename_grid_png)
-                save_image_with_metrics(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
-
-                for k in range(self.num_steps):
-                    if k % freq == 0:
+                x_start_tot_grid = torch.cat([x_start[:self.num_plots_grid].unsqueeze(0), x_tot_grid], dim=0)
+                for k in range(self.num_steps+1):
+                    if k % freq == 0 or k == self.num_steps:
                         # save png
-                        filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k+1))
+                        filename_grid_png = os.path.join(im_dir, 'im_grid_{0}.png'.format(k))
                         plot_paths.append(filename_grid_png)
-                        save_image_with_metrics(x_tot_grid[k], filename_grid_png, nrow=10)
+                        save_image_with_metrics(x_start_tot_grid[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
 
@@ -506,15 +502,16 @@ class OneDCondPlotter(Plotter):
 
         name_gif = name + '_density'
         plot_paths_reg = []
-        for k in range(self.num_steps):
-            if k % freq == 0:
+        x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
+        for k in range(self.num_steps+1):
+            if k % freq == 0 or k == self.num_steps:
                 filename = name_gif + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
                 plt.clf()            
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
-                kde_yx = kde.gaussian_kde([y_start[:, 0], x_tot[k, :, 0]])
+                kde_yx = kde.gaussian_kde([y_start[:, 0], x_start_tot[k, :, 0]])
                 xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
                 zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
@@ -546,6 +543,9 @@ class OneDCondPlotter(Plotter):
         elif data == 'type3':
             xlim = [-0.8,0.8]
             colors = ['red', 'blue']
+
+        x_start = x_start.cpu().numpy()
+        x_tot_cond = x_tot_cond.cpu().numpy()
         
         # HISTOGRAMS
         name_gif = name + '_cond_histogram'
@@ -573,13 +573,14 @@ class OneDCondPlotter(Plotter):
 
                 zs_lin = np.vstack([zs_lin, z])
 
-            for k in range(self.num_steps):
-                if k % freq == 0:
+            x_start_tot_cond = np.concatenate([np.expand_dims(x_start, axis=1), x_tot_cond], axis=1)
+            for k in range(self.num_steps+1):
+                if k % freq == 0 or k == self.num_steps:
                     plt.clf()
                     for j in range(len(y_cond)):
                         y_c = y_cond[j]
 
-                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
+                        x_cond = x_start_tot_cond[j][k, :, 0]
 
                         plt.plot(x_lin, zs_lin[j], color=colors[j])
                         plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
@@ -639,6 +640,9 @@ class FiveDCondPlotter(Plotter):
         elif data == 'type4':
             xlim = [-3.5,3.5]
 
+        x_start = x_start.cpu().numpy()
+        x_tot_cond = x_tot_cond.cpu().numpy()
+
         # HISTOGRAMS
         name_gif = name + '_cond_histogram'
         plot_paths_reg = []
@@ -669,13 +673,14 @@ class FiveDCondPlotter(Plotter):
 
                 zs_lin = np.vstack([zs_lin, z])
 
-            for k in range(self.num_steps):
-                if k % freq == 0:
+            x_start_tot_cond = np.concatenate([np.expand_dims(x_start, axis=1), x_tot_cond], axis=1)
+            for k in range(self.num_steps+1):
+                if k % freq == 0 or k == self.num_steps:
                     plt.clf()
                     for j in range(len(y_cond)):
                         y_c = y_cond[j]
 
-                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
+                        x_cond = x_start_tot_cond[j][k, :, 0]
 
                         x_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
 
@@ -691,13 +696,11 @@ class FiveDCondPlotter(Plotter):
                     plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                     plot_paths_reg.append(filename)
                 
-                if k == self.num_steps - 1:
+                if k == self.num_steps:
                     raw_data_save = {'x': x_lin, 'y': y_cond, 'px_y_true': zs_lin}
                     zs_cond_kde = np.zeros([0, npts])
                     for j in range(len(y_cond)):
-                        y_c = y_cond[j]
-
-                        x_cond = x_tot_cond[j][k, :, 0].cpu().numpy()
+                        x_cond = x_start_tot_cond[j][k, :, 0]
 
                         z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
                         zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])

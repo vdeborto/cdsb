@@ -99,11 +99,16 @@ class Cond_Stacked_MNIST(Dataset):
                 self.data_y = torch.nn.functional.conv2d(self.data_x, downsample_kernel, stride=factor,
                                                          groups=num_channels)
                 self.data_y = torch.nn.functional.interpolate(self.data_y, (imageSize, imageSize))
-
-                torch.save(self.data_y, os.path.join(root, f"data_y_{data_tag}_{split}.pt"))
-                save_image(self.data_y[:100], os.path.join(root, f"data_y_{data_tag}_{split}.png"), nrow=10)
+            elif task[0] == 'inpaint':
+                mask = torch.zeros([1, imageSize, imageSize])
+                if task[1] == 'center':
+                    mask[:, imageSize//4:-imageSize//4, imageSize//4:-imageSize//4] = 1
+                self.data_y = self.data_x * (1 - mask)
             else:
                 raise NotImplementedError
+
+            torch.save(self.data_y, os.path.join(root, f"data_y_{data_tag}_{split}.pt"))
+            save_image(self.data_y[:100], os.path.join(root, f"data_y_{data_tag}_{split}.png"), nrow=10)
 
     def __len__(self):
         return len(self.data_x)

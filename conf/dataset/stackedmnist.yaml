@@ -10,8 +10,7 @@ data:
 y_cond: null
 
 # task
-task: SuperRes
-factor: 4
+task: superres_4
 
 # transfer
 transfer: False
@@ -55,7 +54,7 @@ n_ipf: 20
 lr: 0.0001
 
 # schedule
-num_steps : 30
+num_steps: 30
 gamma_max: 0.1
 gamma_min: 0.00001
 gamma_space: linspace

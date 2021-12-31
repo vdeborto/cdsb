@@ -185,9 +185,7 @@ def get_datasets(args):
     if dataset_tag == DATASET_STACKEDMNIST:
         root = os.path.join(data_dir, 'mnist')
         load = args.load
-        init_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
-                                train=True, num_channels = args.data.channels, 
-                                imageSize=args.data.image_size)
+        init_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='train', num_channels=args.data.channels)
 
     # EMNIST DATASET
 
@@ -262,6 +260,23 @@ def get_final_dataset(args, init_ds):
     return final_ds, mean_final, var_final
 
 
+def get_valid_test_datasets(args):
+    valid_ds, test_ds = None, None
+
+    dataset_tag = getattr(args, DATASET)
+    data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
+
+    # MNIST DATASET
+
+    if dataset_tag == DATASET_STACKEDMNIST:
+        root = os.path.join(data_dir, 'mnist')
+        load = args.load
+        valid_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='valid', num_channels=args.data.channels)
+        test_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='test', num_channels=args.data.channels)
+
+    return valid_ds, test_ds
+
+
 def get_filtering_process(args):
     dataset_tag = getattr(args, DATASET)
 
@@ -330,7 +345,7 @@ def get_logger(args, name):
     logger_tag = getattr(args, LOGGER)
 
     if logger_tag == CSV_TAG:
-        kwargs = {'directory': args.CSV_log_dir, 'name': name}
+        kwargs = {'save_dir': args.CSV_log_dir, 'name': name, 'flush_logs_every_n_steps': 1}
         return CSVLogger(**kwargs)
 
     if logger_tag == NOLOG_TAG:

@@ -17,7 +17,8 @@ from torch.utils.data import TensorDataset
 from accelerate import Accelerator, DistributedType
 
 class IPFBase:
-    def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None):
+    def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None,
+                 valid_ds=None, test_ds=None):
         super().__init__()
         if accelerator is None:
             self.accelerator = Accelerator(fp16=False, cpu=args.device == 'cpu', split_batches=True)
@@ -29,6 +30,9 @@ class IPFBase:
 
         self.init_ds = init_ds
         self.final_ds = final_ds
+        self.valid_ds = valid_ds
+        self.test_ds = test_ds
+
         self.mean_final = mean_final
         self.var_final = var_final
         self.std_final = torch.sqrt(self.var_final)
@@ -216,8 +220,19 @@ class IPFBase:
         self.cache_init_dl = self.accelerator.prepare(self.cache_init_dl)
         self.cache_init_dl = repeater(self.cache_init_dl)
 
-        self.save_init_dl = DataLoader(TensorDataset(*self.init_ds[:self.save_npar]), batch_size=self.test_batch_size, **self.kwargs)
+        self.save_init_dl = DataLoader(self.init_ds, batch_size=self.test_batch_size, **self.kwargs)
         self.save_init_dl = self.accelerator.prepare(self.save_init_dl)
+        self.save_dls_dict = {"train": self.save_init_dl}
+
+        if self.valid_ds is not None:
+            self.save_valid_dl = DataLoader(self.valid_ds, batch_size=self.test_batch_size, **self.kwargs)
+            self.save_valid_dl = self.accelerator.prepare(self.save_valid_dl)
+            self.save_dls_dict["valid"] = self.save_valid_dl
+
+        if self.test_ds is not None:
+            self.save_test_dl = DataLoader(self.test_ds, batch_size=self.test_batch_size, **self.kwargs)
+            self.save_test_dl = self.accelerator.prepare(self.save_test_dl)
+            self.save_dls_dict["test"] = self.save_test_dl
 
         if self.transfer:
             self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
@@ -306,7 +321,6 @@ class IPFBase:
                     test_metrics = self.plotter(sample_net, i, n, fb)
 
                     if self.accelerator.is_main_process:
-                        test_metrics['T'] = self.T
                         self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
 
     def sample_batch(self, init_dl, final_dl, fb, y_c=None):
@@ -502,7 +516,6 @@ class IPFSequential(IPFBase):
             test_metrics = self.plotter(None, 0, 0, 'f')
 
             if self.accelerator.is_main_process:
-                test_metrics['T'] = self.T
                 self.save_logger.log_metrics(test_metrics, step=0)
 
             

@@ -8,8 +8,8 @@ import torch
 import torchvision.utils as vutils
 from . import repeater
 from ..data.utils import save_image, to_uint8_tensor, normalize_tensor
+from ..data.metrics import PSNR, SSIM, FID
 from PIL import Image
-from torchmetrics.image import PSNR, SSIM
 matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
 
@@ -55,35 +55,49 @@ class Plotter(object):
             os.makedirs(self.im_dir, exist_ok=True)
             os.makedirs(self.gif_dir, exist_ok=True)
 
+        self.metrics_dict = {}
+
     def __call__(self, sample_net, i, n, fb):
         out = {}
+        self.step = max(i+self.ipf.num_iter*(n-1), 0)
 
-        x_start, y_start, x_tot, x_init, mean_final, var_final, time_joint = self.generate_sequence_joint(sample_net, i, n, fb)
         if self.ipf.accelerator.is_main_process:
-            if self.args.cond_final:
-                self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
-                                         x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
-                                         self.dataset, i, n, fb,
-                                         mean_final=mean_final[:self.args.plot_npar], var_final=var_final[:self.args.plot_npar])
-                out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
-                                           x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
-                                           self.dataset, i, n, fb,
-                                           mean_final=mean_final[:self.args.test_npar], var_final=var_final[:self.args.test_npar]))
-            else:
-                self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
-                                         x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
-                                         self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final)
-                out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
-                                           x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
-                                           self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final))
+            out['FB'] = fb
+            out['T'] = self.ipf.T
+
+        for dl_name, dl in self.ipf.save_dls_dict.items():
+            x_start, y_start, x_tot, x_init, mean_final, var_final, time_joint, metric_results = \
+                self.generate_sequence_joint(dl, sample_net, i, n, fb, dl_name=dl_name)
+            out.update(metric_results)
+
+            if self.ipf.accelerator.is_main_process and dl_name == "train":
+                if self.args.cond_final:
+                    self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
+                                             x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
+                                             self.dataset, i, n, fb,
+                                             mean_final=mean_final[:self.args.plot_npar],
+                                             var_final=var_final[:self.args.plot_npar])
+                    out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
+                                               x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
+                                               self.dataset, i, n, fb,
+                                               mean_final=mean_final[:self.args.test_npar],
+                                               var_final=var_final[:self.args.test_npar]))
+                else:
+                    self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
+                                             x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
+                                             self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final)
+                    out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
+                                               x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
+                                               self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final))
 
         if n > 0 and self.ipf.y_cond is not None:
             if fb == 'b':
                 x_start_cond = []
                 x_tot_cond = []
                 time_cond = []
+                save_init_dl = repeater(self.ipf.save_init_dl)
                 for y_c in self.ipf.y_cond:
-                    x_start, x_tot_c, time_c = self.generate_sequence_cond(y_c, sample_net, i, n, fb)
+                    x_start, x_tot_c, time_c = self.generate_sequence_cond(y_c, save_init_dl, sample_net, i, n, fb)
                     if self.ipf.accelerator.is_main_process:
                         x_start_cond.append(x_start)
                         x_tot_cond.append(x_tot_c)
@@ -103,8 +117,9 @@ class Plotter(object):
                 x_tot_fwd_cond = []
                 x_tot_fwdbwd_cond = []
                 time_cond = []
+                save_init_dl = repeater(self.ipf.save_init_dl)
                 for y_c in self.ipf.y_cond:
-                    x_init, y_init, x_tot_fwd, x_tot_fwdbwd_c, time_c = self.generate_sequence_cond_fwdbwd(y_c, sample_net, i, n, fb)
+                    x_init, y_init, x_tot_fwd, x_tot_fwdbwd_c, time_c = self.generate_sequence_cond_fwdbwd(y_c, save_init_dl, sample_net, i, n, fb)
                     if self.ipf.accelerator.is_main_process:
                         x_init_cond.append(x_init)
                         y_init_cond.append(y_init)
@@ -126,26 +141,43 @@ class Plotter(object):
         torch.cuda.empty_cache()
         return out
 
-    def generate_sequence_joint(self, sample_net, i, n, fb):
-        iter_save_init_dl = iter(self.ipf.save_init_dl)
+    def generate_sequence_joint(self, dl, sample_net, i, n, fb, dl_name=''):
+        iter_dl = iter(dl)
+        for metric in self.metrics_dict.values():
+            metric.reset()
 
-        start = time.time()
         all_batch_x = []
         all_batch_y = []
         all_x_tot = []
         all_init_batch_x = []
         all_mean_final = []
         all_var_final = []
+        times = []
+        metric_results = {}
 
-        while True:
+        iters = 0
+        while iters * self.ipf.test_batch_size < self.ipf.save_npar:
             try:
-                batch_x, batch_y, init_batch_x, mean_final, var_final = self.ipf.sample_batch(iter_save_init_dl, self.ipf.save_final_dl, fb)
+                start = time.time()
+
+                batch_x, batch_y, init_batch_x, mean_final, var_final = self.ipf.sample_batch(iter_dl, self.ipf.save_final_dl, fb)
 
                 if n == 0:
                     assert fb == 'f'
                     x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
                 else:
                     x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
+
+                stop = time.time()
+                times.append(stop - start)
+
+                if fb == 'b':
+                    x_last = x_tot[:, -1]
+                    uint8_x_init = to_uint8_tensor(init_batch_x)
+                    uint8_x_last = to_uint8_tensor(x_last)
+
+                    for metric in self.metrics_dict.values():
+                        metric.update(uint8_x_last, uint8_x_init)
 
                 gather_batch_x = self.ipf.accelerator.gather(batch_x)
                 gather_batch_y = self.ipf.accelerator.gather(batch_y)
@@ -164,6 +196,8 @@ class Plotter(object):
                     if self.args.cond_final:
                         all_mean_final.append(gather_mean_final.cpu())
                         all_var_final.append(gather_var_final.cpu())
+
+                iters = iters + 1
 
             except StopIteration:
                 break
@@ -184,15 +218,20 @@ class Plotter(object):
                 all_mean_final = self.ipf.mean_final.cpu()
                 all_var_final = self.ipf.var_final.cpu()
 
-        stop = time.time()
-        return all_batch_x, all_batch_y, all_x_tot, all_init_batch_x, all_mean_final, all_var_final, stop-start
+        if fb == 'b':
+            for metric_name, metric in self.metrics_dict.items():
+                metric_result = metric.compute()
+                if self.ipf.accelerator.is_main_process:
+                    metric_results[dl_name + "/" + metric_name] = metric_result
+                metric.reset()
 
-    def generate_sequence_cond(self, y_c, sample_net, i, n, fb):
+        return all_batch_x, all_batch_y, all_x_tot, all_init_batch_x, all_mean_final, all_var_final, times, metric_results
+
+    def generate_sequence_cond(self, y_c, dl, sample_net, i, n, fb):
         if y_c is not None and fb == 'b':
-            save_init_dl = repeater(self.ipf.save_init_dl)
             start = time.time()
 
-            batch_x, _, _, _, _ = self.ipf.sample_batch(save_init_dl, self.ipf.save_final_dl, fb, y_c=y_c)
+            batch_x, _, _, _, _ = self.ipf.sample_batch(dl, self.ipf.save_final_dl, fb, y_c=y_c)
             x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net)
 
             gather_batch_x = self.ipf.accelerator.gather(batch_x).cpu()
@@ -201,12 +240,11 @@ class Plotter(object):
             stop = time.time()
             return gather_batch_x, gather_x_tot_c, stop-start
 
-    def generate_sequence_cond_fwdbwd(self, y_c, sample_net, i, n, fb):
+    def generate_sequence_cond_fwdbwd(self, y_c, dl, sample_net, i, n, fb):
         if y_c is not None and not self.args.cond_final:
-            save_init_dl = repeater(self.ipf.save_init_dl)
             start = time.time()
 
-            batch_x, batch_y, init_batch_x, _, _ = self.ipf.sample_batch(save_init_dl, self.ipf.save_final_dl, fb)
+            batch_x, batch_y, init_batch_x, _, _ = self.ipf.sample_batch(dl, self.ipf.save_final_dl, fb)
             init_batch_y = batch_y
 
             if fb == 'f':
@@ -344,8 +382,7 @@ class Plotter(object):
         x_mean_last = torch.mean(x_last).item()
         x_mean_start = torch.mean(x_start).item()
 
-        out = {'FB': fb,
-               'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
+        out = {'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
                'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
 
         if mean_final is not None:
@@ -366,6 +403,10 @@ class ImPlotter(Plotter):
         self.num_plots_grid = 100
         self.plot_level = self.args.plot_level
 
+        self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
+                             "ssim": SSIM(data_range=255.).to(self.ipf.device),
+                             "fid": FID().to(self.ipf.device)}
+
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
                             mean_final=None, var_final=None):
         super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq,
@@ -383,20 +424,19 @@ class ImPlotter(Plotter):
                 os.mkdir(im_dir)
 
             # plot_level 1
-            normalized_x_init = normalize_tensor(x_init[:self.num_plots_grid])
+            uint8_x_init = to_uint8_tensor(x_init[:self.num_plots_grid])
 
             def save_image_with_metrics(batch_x, filename, **kwargs):
                 plt.clf()
 
-                normalized_batch_x = normalize_tensor(batch_x)
                 uint8_batch_x = to_uint8_tensor(batch_x)
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                psnr = PSNR(data_range=1.)
-                psnr = psnr(normalized_batch_x, normalized_x_init).item()
-                ssim = SSIM(data_range=1.)
-                ssim = ssim(normalized_batch_x, normalized_x_init).item()
+                psnr = PSNR(data_range=255.)
+                psnr = psnr(uint8_batch_x, uint8_x_init).item()
+                ssim = SSIM(data_range=255.)
+                ssim = ssim(uint8_batch_x, uint8_x_init).item()
 
                 plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr, 2)) + '\n ssim ' + str(
                     round(ssim, 2)))
@@ -435,20 +475,6 @@ class ImPlotter(Plotter):
                         plt.clf()
                         filename_png = os.path.join(im_dir, '{:05}.png'.format(k))
                         save_image(x_tot[-1, k], filename_png)
-
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
-        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, mean_final=mean_final, var_final=var_final)
-
-        if fb == 'b':
-            x_last = x_tot[-1]
-            normalized_x_init = normalize_tensor(x_init)
-            normalized_x_last = normalize_tensor(x_last)
-            psnr = PSNR(data_range=1.)
-            out["psnr"] = psnr(normalized_x_last, normalized_x_init)
-            ssim = SSIM(data_range=1.)
-            out["ssim"] = ssim(normalized_x_last, normalized_x_init)
-
-        return out
 
 
 class OneDCondPlotter(Plotter):

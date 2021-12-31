@@ -266,14 +266,14 @@ class Plotter(object):
             stop = time.time()
             return gather_init_batch_x, gather_init_batch_y, gather_x_tot_fwd, gather_x_tot_fwdbwd_c, stop-start
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
                             mean_final=None, var_final=None):
         if dl_name == 'train':
             if freq is None:
                 freq = self.num_steps // min(self.num_steps, 50)
-            name = str(i) + '_' + fb + '_' + str(n) + '_'
-            im_dir = os.path.join(self.im_dir, name, dl_name)
-            name = name + tag
+            iter_name = str(i) + '_' + fb + '_' + str(n)
+            im_dir = os.path.join(self.im_dir, iter_name, dl_name)
+            gif_dir = os.path.join(self.gif_dir, dl_name)
 
             if not os.path.isdir(im_dir):
                 os.mkdir(im_dir)
@@ -287,12 +287,13 @@ class Plotter(object):
             x_start = x_start.reshape([x_start.shape[0], -1])
             x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
 
-            name_gif = name + '_histogram'
+            plot_name = 'histogram'
+            name_gif = f'{iter_name}_{plot_name}'
             plot_paths_reg = []
             dims = np.sort(np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False))
             for k in range(self.num_steps+1):
                 if k % freq == 0 or k == self.num_steps:
-                    filename = name_gif + '_' + str(k) + '.png'
+                    filename = plot_name + '_' + str(k) + '.png'
                     filename = os.path.join(im_dir, filename)
                     plt.clf()
                     fig = plt.figure(figsize=(5*len(dims), 4))
@@ -315,7 +316,7 @@ class Plotter(object):
                     plt.close()
                     plot_paths_reg.append(filename)
 
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+            make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         pass
@@ -324,7 +325,7 @@ class Plotter(object):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         pass
 
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', mean_final=None, var_final=None):
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', mean_final=None, var_final=None):
         out = {}
         if dl_name == 'train':
             x_last = x_tot[-1]
@@ -359,18 +360,18 @@ class ImPlotter(Plotter):
                              "ssim": SSIM(data_range=255.).to(self.ipf.device),
                              "fid": FID().to(self.ipf.device)}
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
                             mean_final=None, var_final=None):
-        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq,
+        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, freq=freq,
                                     mean_final=mean_final, var_final=var_final)
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
 
         if self.plot_level >= 1:
             x_tot_grid = x_tot[:, :self.num_plots_grid]
-            name = str(i) + '_' + fb + '_' + str(n) + '_'
+            name = str(i) + '_' + fb + '_' + str(n)
             im_dir = os.path.join(self.im_dir, name, dl_name)
-            name = name + tag
+            gif_dir = os.path.join(self.gif_dir, dl_name)
 
             if not os.path.isdir(im_dir):
                 os.mkdir(im_dir)
@@ -422,7 +423,7 @@ class ImPlotter(Plotter):
                         plot_paths.append(filename_grid_png)
                         save_image_with_metrics(x_start_tot_grid[k], filename_grid_png, nrow=10)
 
-                make_gif(plot_paths, output_directory=self.gif_dir, gif_name=name+'_samples')
+                make_gif(plot_paths, output_directory=gif_dir, gif_name=name+'_im_grid')
 
             if self.plot_level >= 3:
                 if fb == 'b':
@@ -437,13 +438,13 @@ class ImPlotter(Plotter):
 
 
 class OneDCondPlotter(Plotter):
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
                             mean_final=None, var_final=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name, dl_name)
-        name = name + tag
+        iter_name = str(i) + '_' + fb + '_' + str(n)
+        im_dir = os.path.join(self.im_dir, iter_name, dl_name)
+        gif_dir = os.path.join(self.gif_dir, dl_name)
 
         if not os.path.isdir(im_dir):
             os.mkdir(im_dir)
@@ -475,7 +476,7 @@ class OneDCondPlotter(Plotter):
 
         if n == 0 and fb == "f":
             plt.clf()
-            filename = 'original_density.png'
+            filename = f'true_density_{dl_name}.png'
             filename = os.path.join(self.im_dir, filename)
             kde_yx = kde.gaussian_kde([y_start[:,0], x_start[:,0]])
             xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
@@ -485,12 +486,15 @@ class OneDCondPlotter(Plotter):
             plt.ylabel("x")
             plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
 
-        name_gif = name + '_density'
+            self.ipf.save_logger.log_image(dl_name + '/true_density', filename, step=self.step, fb=fb)
+
+        plot_name = 'density'
+        name_gif = f'{iter_name}_{plot_name}'
         plot_paths_reg = []
         x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
         for k in range(self.num_steps+1):
             if k % freq == 0 or k == self.num_steps:
-                filename = name_gif + '_' + str(k) + '.png'
+                filename = plot_name + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
                 plt.clf()            
                 if n is not None:
@@ -505,19 +509,20 @@ class OneDCondPlotter(Plotter):
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
 
-        make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)    
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
+
+        self.ipf.save_logger.log_image(f'{dl_name}/{plot_name}_last', filename, step=self.step, fb=fb)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name, 'cond')
-        name = name + tag
+        iter_name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, iter_name, 'cond')
+        gif_dir = os.path.join(self.gif_dir, 'cond')
 
         if not os.path.isdir(im_dir):
             os.mkdir(im_dir)
-        
-        ylim = [-3, 3]
+
         npts = 250
         if data == 'type1':
             xlim = [-1,3]
@@ -533,60 +538,62 @@ class OneDCondPlotter(Plotter):
         x_tot_cond = x_tot_cond.cpu().numpy()
         
         # HISTOGRAMS
-        name_gif = name + '_cond_histogram'
+        plot_name = 'cond_histogram_' + tag
+        name_gif = f'{iter_name}_{plot_name}'
         plot_paths_reg = []
 
-        if fb == 'b' and y_cond is not None:
-            x_lin = np.linspace(xlim[0], xlim[1], npts)
-            zs_lin = np.zeros([0, npts])
+        x_lin = np.linspace(xlim[0], xlim[1], npts)
+        zs_lin = np.zeros([0, npts])
 
-            y_cond = y_cond.cpu().numpy()
+        y_cond = y_cond.cpu().numpy()
 
-            for j in range(len(y_cond)):
-                y_c = y_cond[j]
+        for j in range(len(y_cond)):
+            y_c = y_cond[j]
 
-                if data == 'type1':
-                    z = gamma.pdf(x_lin - np.tanh(y_c), 1, scale=0.3)
-                elif data == 'type2':
-                    sigma = np.sqrt(0.05)
-                    z1 = 1 / (1 - x_lin**2)
-                    z2 = np.arctanh(x_lin)
-                    z3 = norm.pdf(z2, loc=y_c, scale=sigma)
-                    z = z3 * z1
-                elif data == 'type3':
-                    z = gamma.pdf(x_lin / np.tanh(y_c), 1, scale=0.3)
+            if data == 'type1':
+                z = gamma.pdf(x_lin - np.tanh(y_c), 1, scale=0.3)
+            elif data == 'type2':
+                sigma = np.sqrt(0.05)
+                z1 = 1 / (1 - x_lin**2)
+                z2 = np.arctanh(x_lin)
+                z3 = norm.pdf(z2, loc=y_c, scale=sigma)
+                z = z3 * z1
+            elif data == 'type3':
+                z = gamma.pdf(x_lin / np.tanh(y_c), 1, scale=0.3)
 
-                zs_lin = np.vstack([zs_lin, z])
+            zs_lin = np.vstack([zs_lin, z])
 
-            x_start_tot_cond = np.concatenate([np.expand_dims(x_start, axis=1), x_tot_cond], axis=1)
-            for k in range(self.num_steps+1):
-                if k % freq == 0 or k == self.num_steps:
-                    plt.clf()
-                    for j in range(len(y_cond)):
-                        y_c = y_cond[j]
+        x_start_tot_cond = np.concatenate([np.expand_dims(x_start, axis=1), x_tot_cond], axis=1)
+        for k in range(self.num_steps+1):
+            if k % freq == 0 or k == self.num_steps:
+                plt.clf()
+                for j in range(len(y_cond)):
+                    y_c = y_cond[j]
 
-                        x_cond = x_start_tot_cond[j][k, :, 0]
+                    x_cond = x_start_tot_cond[j][k, :, 0]
 
-                        plt.plot(x_lin, zs_lin[j], color=colors[j])
-                        plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
+                    plt.plot(x_lin, zs_lin[j], color=colors[j])
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
 
-                    filename = name_gif + '_' + str(k) + '.png'
-                    filename = os.path.join(im_dir, filename)
+                filename = plot_name + '_' + str(k) + '.png'
+                filename = os.path.join(im_dir, filename)
 
-                    if n is not None:
-                        str_title = 'IPFP iteration: ' + str(n)
-                        plt.title(str_title)
-                    plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
-                    plot_paths_reg.append(filename)
-        
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+                if n is not None:
+                    str_title = 'IPFP iteration: ' + str(n)
+                    plt.title(str_title)
+                plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
+                plot_paths_reg.append(filename)
+
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
+
+        self.ipf.save_logger.log_image(f'cond/{plot_name}_last', filename, step=self.step, fb=fb)
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', mean_final=None, var_final=None):
-        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, mean_final=mean_final, var_final=var_final)
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', mean_final=None, var_final=None):
+        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, mean_final=mean_final, var_final=var_final)
 
         if fb == 'b':
             y_start = y_start.detach().cpu().numpy()
@@ -598,8 +605,8 @@ class OneDCondPlotter(Plotter):
 
             batch = np.hstack([x_init, y_start])
 
-            out[dl_name + "/l2_pq_" + tag] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
-            out[dl_name + "/kl_pq_" + tag] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
+            out[dl_name + "/l2_pq"] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
+            out[dl_name + "/kl_pq"] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
 
         return out
 
@@ -608,9 +615,9 @@ class FiveDCondPlotter(Plotter):
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name, 'cond')
-        name = name + tag
+        iter_name = str(i) + '_' + fb + '_' + str(n) + '_'
+        im_dir = os.path.join(self.im_dir, iter_name, 'cond')
+        gif_dir = os.path.join(self.gif_dir, 'cond')
 
         if not os.path.isdir(im_dir):
             os.mkdir(im_dir)
@@ -629,7 +636,8 @@ class FiveDCondPlotter(Plotter):
         x_tot_cond = x_tot_cond.cpu().numpy()
 
         # HISTOGRAMS
-        name_gif = name + '_cond_histogram'
+        plot_name = 'cond_histogram_' + tag
+        name_gif = f'{iter_name}_{plot_name}'
         plot_paths_reg = []
 
         if fb == 'b' and y_cond is not None:
@@ -672,7 +680,7 @@ class FiveDCondPlotter(Plotter):
                         plt.plot(x_lin, zs_lin[j], color="C"+str(j))
                         plt.plot(x_lin, x_cond_kde, color="C"+str(j), ls="--")
 
-                    filename = name_gif + '_' + str(k) + '.png'
+                    filename = plot_name + '_' + str(k) + '.png'
                     filename = os.path.join(im_dir, filename)
 
                     if n is not None:
@@ -680,19 +688,18 @@ class FiveDCondPlotter(Plotter):
                         plt.title(str_title)
                     plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                     plot_paths_reg.append(filename)
-                
-                if k == self.num_steps:
-                    raw_data_save = {'x': x_lin, 'y': y_cond, 'px_y_true': zs_lin}
-                    zs_cond_kde = np.zeros([0, npts])
-                    for j in range(len(y_cond)):
-                        x_cond = x_start_tot_cond[j][k, :, 0]
 
-                        z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
-                        zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])
-                    raw_data_save['px_y_kde'] = zs_cond_kde
-                    torch.save(raw_data_save, os.path.join(im_dir, name_gif + '_raw_data_' + str(k) + '.pt'))
+            make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
 
-            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+            raw_data_save = {'x': x_lin, 'y': y_cond, 'px_y_true': zs_lin}
+            zs_cond_kde = np.zeros([0, npts])
+            for j in range(len(y_cond)):
+                x_cond = x_start_tot_cond[j][k, :, 0]
+
+                z_cond_kde = kde.gaussian_kde(x_cond)(x_lin)
+                zs_cond_kde = np.vstack([zs_cond_kde, z_cond_kde])
+            raw_data_save['px_y_kde'] = zs_cond_kde
+            torch.save(raw_data_save, os.path.join(im_dir, plot_name + '_raw_data_' + str(k) + '.pt'))
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):

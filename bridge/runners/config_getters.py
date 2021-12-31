@@ -1,4 +1,5 @@
 import torch
+from omegaconf import OmegaConf
 import hydra
 from ..models import *
 # from ..data.biochemical import biochemical_ds
@@ -12,7 +13,7 @@ from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlo
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
-from .logger import CSVLogger, NeptuneLogger, Logger
+from .logger import CSVLogger, WandbLogger, Logger
 from torch.utils.data import DataLoader
 cmp = lambda x: transforms.Compose([*x])
 
@@ -183,9 +184,10 @@ def get_datasets(args):
     # MNIST DATASET
 
     if dataset_tag == DATASET_STACKEDMNIST:
+        data_tag = args.data.dataset
         root = os.path.join(data_dir, 'mnist')
         load = args.load
-        init_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='train', num_channels=args.data.channels)
+        init_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='train', num_channels=args.data.channels)
 
     # EMNIST DATASET
 
@@ -269,10 +271,11 @@ def get_valid_test_datasets(args):
     # MNIST DATASET
 
     if dataset_tag == DATASET_STACKEDMNIST:
+        data_tag = args.data.dataset
         root = os.path.join(data_dir, 'mnist')
         load = args.load
-        valid_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='valid', num_channels=args.data.channels)
-        test_ds = Cond_Stacked_MNIST(args, root=root, load=load, split='test', num_channels=args.data.channels)
+        valid_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='valid', num_channels=args.data.channels)
+        test_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='test', num_channels=args.data.channels)
 
     return valid_ds, test_ds
 
@@ -339,6 +342,7 @@ LOGGER = 'LOGGER'
 LOGGER_PARAMS = 'LOGGER_PARAMS'
 
 CSV_TAG = 'CSV'
+WANDB_TAG = 'Wandb'
 NOLOG_TAG = 'NONE'
 
 def get_logger(args, name):
@@ -347,6 +351,15 @@ def get_logger(args, name):
     if logger_tag == CSV_TAG:
         kwargs = {'save_dir': args.CSV_log_dir, 'name': name, 'flush_logs_every_n_steps': 1}
         return CSVLogger(**kwargs)
+
+    if logger_tag == WANDB_TAG:
+        log_dir = os.getcwd()
+        run_name = os.path.normpath(os.path.relpath(log_dir, hydra.utils.to_absolute_path(args.paths.experiments_dir_name))).replace("\\", "/")
+        data_tag = args.data.dataset
+        config = OmegaConf.to_container(args, resolve=True)
+
+        kwargs = {'name': run_name, 'project': 'cdsb_develop_' + args.Dataset, 'prefix': name, 'tags': [data_tag], 'config': config}
+        return WandbLogger(**kwargs)
 
     if logger_tag == NOLOG_TAG:
         return Logger()

@@ -29,9 +29,10 @@ def main():
 
     if args.data == 'cond_mnist':
         root = os.path.join(args.data_dir, 'mnist')
-        Cond_Stacked_MNIST(args, root=root, load=False, split='train', num_channels=1)
-        Cond_Stacked_MNIST(args, root=root, load=False, split='valid', num_channels=1)
-        Cond_Stacked_MNIST(args, root=root, load=False, split='test', num_channels=1)
+        task = args.task
+        Cond_Stacked_MNIST(task, root=root, load=False, split='train', num_channels=1)
+        Cond_Stacked_MNIST(task, root=root, load=False, split='valid', num_channels=1)
+        Cond_Stacked_MNIST(task, root=root, load=False, split='test', num_channels=1)
 
     if args.data == 'celeba':
         root = os.path.join(args.data_dir, 'celeba')

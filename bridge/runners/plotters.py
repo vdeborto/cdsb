@@ -62,7 +62,8 @@ class Plotter(object):
         self.step = max(i+self.ipf.num_iter*(n-1), 0)
 
         if self.ipf.accelerator.is_main_process:
-            out['FB'] = fb
+            out['fb'] = fb
+            out['ipf'] = n
             out['T'] = self.ipf.T
 
         for dl_name, dl in self.ipf.save_dls_dict.items():
@@ -70,25 +71,27 @@ class Plotter(object):
                 self.generate_sequence_joint(dl, sample_net, i, n, fb, dl_name=dl_name)
             out.update(metric_results)
 
-            if self.ipf.accelerator.is_main_process and dl_name == "train":
+            if self.ipf.accelerator.is_main_process:
                 if self.args.cond_final:
                     self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
                                              x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
-                                             self.dataset, i, n, fb,
+                                             self.dataset, i, n, fb, dl_name=dl_name,
                                              mean_final=mean_final[:self.args.plot_npar],
                                              var_final=var_final[:self.args.plot_npar])
                     out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
                                                x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
-                                               self.dataset, i, n, fb,
+                                               self.dataset, i, n, fb, dl_name=dl_name,
                                                mean_final=mean_final[:self.args.test_npar],
                                                var_final=var_final[:self.args.test_npar]))
                 else:
                     self.plot_sequence_joint(x_start[:self.args.plot_npar], y_start[:self.args.plot_npar],
                                              x_tot[:, :self.args.plot_npar], x_init[:self.args.plot_npar],
-                                             self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final)
+                                             self.dataset, i, n, fb, dl_name=dl_name,
+                                             mean_final=mean_final, var_final=var_final)
                     out.update(self.test_joint(x_start[:self.args.test_npar], y_start[:self.args.test_npar],
                                                x_tot[:, :self.args.test_npar], x_init[:self.args.test_npar],
-                                               self.dataset, i, n, fb, mean_final=mean_final, var_final=var_final))
+                                               self.dataset, i, n, fb, dl_name=dl_name,
+                                               mean_final=mean_final, var_final=var_final))
 
         if n > 0 and self.ipf.y_cond is not None:
             if fb == 'b':
@@ -141,7 +144,7 @@ class Plotter(object):
         torch.cuda.empty_cache()
         return out
 
-    def generate_sequence_joint(self, dl, sample_net, i, n, fb, dl_name=''):
+    def generate_sequence_joint(self, dl, sample_net, i, n, fb, dl_name='train'):
         iter_dl = iter(dl)
         for metric in self.metrics_dict.values():
             metric.reset()
@@ -263,109 +266,56 @@ class Plotter(object):
             stop = time.time()
             return gather_init_batch_x, gather_init_batch_y, gather_x_tot_fwd, gather_x_tot_fwdbwd_c, stop-start
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
                             mean_final=None, var_final=None):
-        if freq is None:
-            freq = self.num_steps // min(self.num_steps, 50)
-        name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name)
-        name = name + tag
+        if dl_name == 'train':
+            if freq is None:
+                freq = self.num_steps // min(self.num_steps, 50)
+            name = str(i) + '_' + fb + '_' + str(n) + '_'
+            im_dir = os.path.join(self.im_dir, name, dl_name)
+            name = name + tag
 
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
+            if not os.path.isdir(im_dir):
+                os.mkdir(im_dir)
 
-        x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
-        x_start = x_start.cpu().numpy()
-        if mean_final is not None:
-            mean_final = mean_final.cpu().numpy() + np.zeros_like(x_start[:1])
-        if var_final is not None:
-            var_final = var_final.cpu().numpy() + np.zeros_like(x_start[:1])
-        x_start = x_start.reshape([x_start.shape[0], -1])
-        x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
+            x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
+            x_start = x_start.cpu().numpy()
+            if mean_final is not None:
+                mean_final = mean_final.cpu().numpy() + np.zeros_like(x_start[:1])
+            if var_final is not None:
+                var_final = var_final.cpu().numpy() + np.zeros_like(x_start[:1])
+            x_start = x_start.reshape([x_start.shape[0], -1])
+            x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
 
-        name_gif = name + '_histogram'
-        plot_paths_reg = []
-        dims = np.sort(np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False))
-        for k in range(self.num_steps+1):
-            if k % freq == 0 or k == self.num_steps:
-                filename = name_gif + '_' + str(k) + '.png'
-                filename = os.path.join(im_dir, filename)
-                plt.clf()
-                fig = plt.figure(figsize=(5*len(dims), 4))
-                if n is not None:
-                    str_title = 'IPFP iteration: ' + str(n)
-                    plt.title(str_title)
+            name_gif = name + '_histogram'
+            plot_paths_reg = []
+            dims = np.sort(np.random.choice(x_tot.shape[-1], min(x_tot.shape[-1], 3), replace=False))
+            for k in range(self.num_steps+1):
+                if k % freq == 0 or k == self.num_steps:
+                    filename = name_gif + '_' + str(k) + '.png'
+                    filename = os.path.join(im_dir, filename)
+                    plt.clf()
+                    fig = plt.figure(figsize=(5*len(dims), 4))
+                    if n is not None:
+                        str_title = 'IPFP iteration: ' + str(n)
+                        plt.title(str_title)
 
-                for d in range(len(dims)):
-                    dim = dims[d]
-                    x_min, x_max = np.min(x_start_tot[:, :, dim]), np.max(x_start_tot[:, :, dim])
-                    ax = plt.subplot(1, len(dims), d+1)
-                    plt.hist(x_start_tot[k, :, dim], bins=50, density=True, alpha=0.5)
-                    if mean_final is not None and var_final is not None and fb == 'f' and not self.args.cond_final:
-                        mu = mean_final.reshape([-1])[dim]
-                        sig = np.sqrt(var_final.reshape([-1])[dim])
-                        x_lin = np.linspace(x_min, x_max, 250)
-                        plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
-                    ax.set_xlim(x_min, x_max)
-                plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
-                plt.close()
-                plot_paths_reg.append(filename)
+                    for d in range(len(dims)):
+                        dim = dims[d]
+                        x_min, x_max = np.min(x_start_tot[:, :, dim]), np.max(x_start_tot[:, :, dim])
+                        ax = plt.subplot(1, len(dims), d+1)
+                        plt.hist(x_start_tot[k, :, dim], bins=50, density=True, alpha=0.5)
+                        if mean_final is not None and var_final is not None and fb == 'f' and not self.args.cond_final:
+                            mu = mean_final.reshape([-1])[dim]
+                            sig = np.sqrt(var_final.reshape([-1])[dim])
+                            x_lin = np.linspace(x_min, x_max, 250)
+                            plt.plot(x_lin, stats.norm.pdf(x_lin, mu, sig))
+                        ax.set_xlim(x_min, x_max)
+                    plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                    plt.close()
+                    plot_paths_reg.append(filename)
 
-        make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
-
-        # if x_start[0].shape == y_start[0].shape:
-        #     npts = 250
-        #     x_start = x_start.reshape(x_start.shape[0], -1)
-        #     y_start = y_start.reshape(y_start.shape[0], -1)
-        #
-        #     if n == 0 and fb == "f":
-        #         plt.clf()
-        #         filename = 'original_density.png'
-        #         filename = os.path.join(self.im_dir, filename)
-        #
-        #         fig = plt.figure(figsize=(5*len(dims), 4))
-        #         for d in range(len(dims)):
-        #             dim = dims[d]
-        #             x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
-        #             y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
-        #             ax = plt.subplot(1, len(dims), d+1)
-        #             kde_yx = kde.gaussian_kde([y_start[:, dim], x_start[:, dim]])
-        #             xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
-        #             zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
-        #             plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
-        #             plt.xlabel("y")
-        #             plt.ylabel("x")
-        #         plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
-        #         plt.close()
-        #
-        #     name_gif = name + '_density'
-        #     plot_paths_reg = []
-        #     for k in range(self.num_steps):
-        #         if k % freq == 0:
-        #             filename = name_gif + '_' + str(k) + '.png'
-        #             filename = os.path.join(im_dir, filename)
-        #             plt.clf()
-        #             fig = plt.figure(figsize=(5*len(dims), 4))
-        #             if n is not None:
-        #                 str_title = 'IPFP iteration: ' + str(n)
-        #                 plt.title(str_title)
-        #
-        #             for d in range(len(dims)):
-        #                 dim = dims[d]
-        #                 x_min, x_max = np.min(x_tot[:, :, dim]), np.max(x_tot[:, :, dim])
-        #                 y_min, y_max = np.min(y_start[:, dim]), np.max(y_start[:, dim])
-        #                 ax = plt.subplot(1, len(dims), d+1)
-        #                 kde_yx = kde.gaussian_kde([y_start[:, dim], x_tot[k, :, dim]])
-        #                 xi, yi = np.mgrid[y_min:y_max:npts * 1j, x_min:x_max:npts * 1j]
-        #                 zi = kde_yx(np.vstack([xi.flatten(), yi.flatten()]))
-        #                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
-        #                 plt.xlabel("y")
-        #                 plt.ylabel("x")
-        #             plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
-        #             plt.close()
-        #             plot_paths_reg.append(filename)
-        #
-        #     make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
+            make_gif(plot_paths_reg, output_directory=self.gif_dir, gif_name=name_gif)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         pass
@@ -374,22 +324,24 @@ class Plotter(object):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         pass
 
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
-        x_last = x_tot[-1]
-
-        x_var_last = torch.var(x_last, dim=0).mean().item()
-        x_var_start = torch.var(x_start, dim=0).mean().item()
-        x_mean_last = torch.mean(x_last).item()
-        x_mean_start = torch.mean(x_start).item()
-
-        out = {'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
-               'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
-
-        if mean_final is not None:
-            x_mse_last = torch.mean((x_last - mean_final) ** 2)
-            x_mse_start = torch.mean((x_start - mean_final) ** 2)
-            out.update({"x_mse_start": x_mse_start, "x_mse_last": x_mse_last})
-
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', mean_final=None, var_final=None):
+        out = {}
+        if dl_name == 'train':
+            x_last = x_tot[-1]
+    
+            x_var_last = torch.var(x_last, dim=0).mean().item()
+            x_var_start = torch.var(x_start, dim=0).mean().item()
+            x_mean_last = torch.mean(x_last).item()
+            x_mean_start = torch.mean(x_start).item()
+    
+            out = {'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
+                   'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
+    
+            if mean_final is not None:
+                x_mse_last = torch.mean((x_last - mean_final) ** 2)
+                x_mse_start = torch.mean((x_start - mean_final) ** 2)
+                out.update({"x_mse_start": x_mse_start, "x_mse_last": x_mse_last})
+    
         return out
 
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
@@ -407,7 +359,7 @@ class ImPlotter(Plotter):
                              "ssim": SSIM(data_range=255.).to(self.ipf.device),
                              "fid": FID().to(self.ipf.device)}
 
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
                             mean_final=None, var_final=None):
         super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, freq=freq,
                                     mean_final=mean_final, var_final=var_final)
@@ -417,7 +369,7 @@ class ImPlotter(Plotter):
         if self.plot_level >= 1:
             x_tot_grid = x_tot[:, :self.num_plots_grid]
             name = str(i) + '_' + fb + '_' + str(n) + '_'
-            im_dir = os.path.join(self.im_dir, name)
+            im_dir = os.path.join(self.im_dir, name, dl_name)
             name = name + tag
 
             if not os.path.isdir(im_dir):
@@ -446,12 +398,19 @@ class ImPlotter(Plotter):
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
             save_image_with_metrics(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_start", filename_grid_png, step=self.step, fb=fb)
+
             filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
             save_image_with_metrics(x_tot_grid[-1], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_last", filename_grid_png, step=self.step, fb=fb)
+
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_x.png')
             save_image_with_metrics(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_x", filename_grid_png, step=self.step, fb=fb)
+
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_y.png')
             save_image_with_metrics(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_y", filename_grid_png, step=self.step, fb=fb)
 
             if self.plot_level >= 2:
                 plot_paths = []
@@ -478,12 +437,12 @@ class ImPlotter(Plotter):
 
 
 class OneDCondPlotter(Plotter):
-    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', freq=None,
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', freq=None,
                             mean_final=None, var_final=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name)
+        im_dir = os.path.join(self.im_dir, name, dl_name)
         name = name + tag
 
         if not os.path.isdir(im_dir):
@@ -552,7 +511,7 @@ class OneDCondPlotter(Plotter):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name)
+        im_dir = os.path.join(self.im_dir, name, 'cond')
         name = name + tag
 
         if not os.path.isdir(im_dir):
@@ -626,7 +585,7 @@ class OneDCondPlotter(Plotter):
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
 
-    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, tag='', mean_final=None, var_final=None):
+    def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', tag='', mean_final=None, var_final=None):
         out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, tag=tag, mean_final=mean_final, var_final=var_final)
 
         if fb == 'b':
@@ -639,8 +598,8 @@ class OneDCondPlotter(Plotter):
 
             batch = np.hstack([x_init, y_start])
 
-            out["l2_pq_" + tag] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
-            out["kl_pq_" + tag] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
+            out[dl_name + "/l2_pq_" + tag] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
+            out[dl_name + "/kl_pq_" + tag] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
 
         return out
 
@@ -650,7 +609,7 @@ class FiveDCondPlotter(Plotter):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
         name = str(i) + '_' + fb + '_' + str(n) + '_'
-        im_dir = os.path.join(self.im_dir, name)
+        im_dir = os.path.join(self.im_dir, name, 'cond')
         name = name + tag
 
         if not os.path.isdir(im_dir):

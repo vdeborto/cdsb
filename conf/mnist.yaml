@@ -12,7 +12,7 @@ name: ${Dataset}_${data.dataset}
 nosave: False
 
 # logging
-LOGGER: CSV # NEPTUNE, CSV, NONE
+LOGGER: Wandb  # CSV, Wandb, NONE
 CSV_log_dir: ./
 
 # training

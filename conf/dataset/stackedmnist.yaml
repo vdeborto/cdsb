@@ -3,14 +3,11 @@
 # data 
 Dataset: stackedmnist
 data:
-  dataset: "Stacked_MNIST"
-  category: ""
+  dataset: "superres_4"
   image_size: 28
   channels: 1
 y_cond: null
 
-# task
-task: superres_4
 
 # transfer
 transfer: False

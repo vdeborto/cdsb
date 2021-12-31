@@ -77,7 +77,7 @@ class Stacked_MNIST(Dataset):
         
 
 class Cond_Stacked_MNIST(Dataset):
-    def __init__(self, args, root="./data/mnist/", load=True, split='train', num_channels=3):
+    def __init__(self, data_tag, root="./data/mnist/", load=True, split='train', num_channels=3):
         super().__init__()
         torch.manual_seed(0)
 
@@ -88,9 +88,9 @@ class Cond_Stacked_MNIST(Dataset):
         assert imageSize == 28
 
         if load:
-            self.data_y = torch.load(os.path.join(root, f"data_y_{args.task}_{split}.pt"))
+            self.data_y = torch.load(os.path.join(root, f"data_y_{data_tag}_{split}.pt"))
         else:
-            task = args.task.split("_")
+            task = data_tag.split("_")
             if task[0] == 'superres':
                 factor = int(task[1])
                 downsample_kernel = torch.ones(num_channels, 1, factor, factor)
@@ -100,8 +100,8 @@ class Cond_Stacked_MNIST(Dataset):
                                                          groups=num_channels)
                 self.data_y = torch.nn.functional.interpolate(self.data_y, (imageSize, imageSize))
 
-                torch.save(self.data_y, os.path.join(root, f"data_y_{args.task}_{split}.pt"))
-                save_image(self.data_y[:100], os.path.join(root, f"data_y_{args.task}_{split}.png"), nrow=10)
+                torch.save(self.data_y, os.path.join(root, f"data_y_{data_tag}_{split}.pt"))
+                save_image(self.data_y[:100], os.path.join(root, f"data_y_{data_tag}_{split}.png"), nrow=10)
             else:
                 raise NotImplementedError
 

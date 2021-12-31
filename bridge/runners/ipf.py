@@ -487,7 +487,8 @@ class IPFSequential(IPFBase):
 
 
             if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
-                self.logger.log_metrics({'forward_or_backward': forward_or_backward,
+                self.logger.log_metrics({'fb': forward_or_backward,
+                                         'ipf': n,
                                          'loss': loss, 
                                          'grad_norm': total_norm}, step=i+self.num_iter*(n-1))
             

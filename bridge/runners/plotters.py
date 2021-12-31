@@ -275,8 +275,8 @@ class Plotter(object):
             im_dir = os.path.join(self.im_dir, iter_name, dl_name)
             gif_dir = os.path.join(self.gif_dir, dl_name)
 
-            if not os.path.isdir(im_dir):
-                os.mkdir(im_dir)
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
 
             x_tot = x_tot.cpu().reshape(x_tot.shape[0], x_tot.shape[1], -1).numpy()
             x_start = x_start.cpu().numpy()
@@ -373,8 +373,8 @@ class ImPlotter(Plotter):
             im_dir = os.path.join(self.im_dir, name, dl_name)
             gif_dir = os.path.join(self.gif_dir, dl_name)
 
-            if not os.path.isdir(im_dir):
-                os.mkdir(im_dir)
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
 
             # plot_level 1
             uint8_x_init = to_uint8_tensor(x_init[:self.num_plots_grid])
@@ -428,8 +428,7 @@ class ImPlotter(Plotter):
             if self.plot_level >= 3:
                 if fb == 'b':
                     im_dir = os.path.join(im_dir, "im/")
-                    if not os.path.isdir(im_dir):
-                        os.mkdir(im_dir)
+                    os.makedirs(im_dir, exist_ok=True)
 
                     for k in range(x_tot.shape[1]):
                         plt.clf()
@@ -446,8 +445,8 @@ class OneDCondPlotter(Plotter):
         im_dir = os.path.join(self.im_dir, iter_name, dl_name)
         gif_dir = os.path.join(self.gif_dir, dl_name)
 
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
 
         ylim = [-3, 3]
         npts = 250
@@ -520,8 +519,8 @@ class OneDCondPlotter(Plotter):
         im_dir = os.path.join(self.im_dir, iter_name, 'cond')
         gif_dir = os.path.join(self.gif_dir, 'cond')
 
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
 
         npts = 250
         if data == 'type1':
@@ -619,8 +618,8 @@ class FiveDCondPlotter(Plotter):
         im_dir = os.path.join(self.im_dir, iter_name, 'cond')
         gif_dir = os.path.join(self.gif_dir, 'cond')
 
-        if not os.path.isdir(im_dir):
-            os.mkdir(im_dir)
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
         
         npts = 250
         if data == 'type1':

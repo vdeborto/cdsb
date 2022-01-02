@@ -70,6 +70,7 @@ class Plotter(object):
             x_start, y_start, x_tot, x_init, mean_final, var_final, time_joint, metric_results = \
                 self.generate_sequence_joint(dl, sample_net, i, n, fb, dl_name=dl_name)
             out.update(metric_results)
+            out[dl_name + "/" + 'batch_sample_time'] = np.mean(time_joint)
 
             if self.ipf.accelerator.is_main_process:
                 if self.args.cond_final:
@@ -113,6 +114,7 @@ class Plotter(object):
                                             self.dataset, i, n, fb, x_init_cond=None)
                     out.update(self.test_cond(x_start_cond[:, :self.args.test_npar], self.ipf.y_cond, x_tot_cond[:, :, :self.args.test_npar],
                                               self.dataset, i, n, fb, x_init_cond=None))
+                    out["cond/batch_sample_time"] = np.mean(time_cond)
 
             if not self.args.cond_final:
                 x_init_cond = []
@@ -140,6 +142,7 @@ class Plotter(object):
                                                    self.dataset, i, n, fb, x_init_cond=None)
                     out.update(self.test_cond(x_tot_fwd_cond[:, -1, :self.args.test_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.test_npar],
                                               self.dataset, i, n, fb, x_init_cond=None))
+                    out["cond/batch_sample_time_fwdbwd"] = np.mean(time_cond)
 
         torch.cuda.empty_cache()
         return out
@@ -383,16 +386,17 @@ class ImPlotter(Plotter):
                 plt.clf()
 
                 uint8_batch_x = to_uint8_tensor(batch_x)
-                uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
-                plt.imshow(uint8_batch_x_grid)
 
-                psnr = PSNR(data_range=255.).to(self.ipf.device)
-                psnr_result = psnr(uint8_batch_x.to(self.ipf.device), uint8_x_init.to(self.ipf.device)).item()
+                psnr = PSNR(data_range=255.)
+                psnr_result = psnr(uint8_batch_x, uint8_x_init).item()
                 psnr.reset()
 
-                ssim = SSIM(data_range=255.).to(self.ipf.device)
-                ssim_result = ssim(uint8_batch_x.to(self.ipf.device), uint8_x_init.to(self.ipf.device)).item()
+                ssim = SSIM(data_range=255.)
+                ssim_result = ssim(uint8_batch_x, uint8_x_init).item()
                 ssim.reset()
+
+                uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
+                plt.imshow(uint8_batch_x_grid)
 
                 plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr_result, 2)) + '\n ssim ' + str(
                     round(ssim_result, 2)))
@@ -468,7 +472,7 @@ class OneDCondPlotter(Plotter):
         elif data == 'type3':
             xlim = [-0.8,0.8]
             # true_pdf = lambda xy: 1/6 * gamma.pdf(xy[:, 0] / np.tanh(xy[:, 1]), 1, scale=0.3)
-        
+
         # DENSITY
         # ROLES OF X AND Y inversed when compared to Conditional Sampling.
 
@@ -498,7 +502,7 @@ class OneDCondPlotter(Plotter):
             if k % freq == 0 or k == self.num_steps:
                 filename = plot_name + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
-                plt.clf()            
+                plt.clf()
                 if n is not None:
                     str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
@@ -538,7 +542,7 @@ class OneDCondPlotter(Plotter):
 
         x_start = x_start.cpu().numpy()
         x_tot_cond = x_tot_cond.cpu().numpy()
-        
+
         # HISTOGRAMS
         plot_name = 'cond_histogram_' + tag
         name_gif = f'{iter_name}_{plot_name}'
@@ -623,7 +627,7 @@ class FiveDCondPlotter(Plotter):
 
         os.makedirs(im_dir, exist_ok=True)
         os.makedirs(gif_dir, exist_ok=True)
-        
+
         npts = 250
         if data == 'type1':
             xlim = [-4.5,6.5]
@@ -653,7 +657,7 @@ class FiveDCondPlotter(Plotter):
 
                 if data == 'type1':
                     z = norm.pdf(x_lin, loc=y_c[0]**2 + torch.exp(y_c[1] + y_c[2]/3) + torch.sin(y_c[3] + y_c[4]))
-                
+
                 elif data == 'type2':
                     x_mean = y_c[0]**2 + torch.exp(y_c[1] + y_c[2]/3) + y_c[3] - y_c[4]
                     x_std = 0.5 + y_c[1]**2/2 + y_c[4]**2/2
@@ -731,8 +735,8 @@ class FiveDCondPlotter(Plotter):
 
             x_tot_cond_std, x_tot_cond_mean = torch.std_mean(x_tot_cond[:, -1], 1)
 
-            out["mse_mean_" + tag] = torch.mean((x_tot_cond_mean - true_x_test_mean)**2)
-            out["mse_std_" + tag] = torch.mean((x_tot_cond_std - true_x_test_std)**2)
+            out["cond/mse_mean_" + tag] = torch.mean((x_tot_cond_mean - true_x_test_mean)**2)
+            out["cond/mse_std_" + tag] = torch.mean((x_tot_cond_std - true_x_test_std)**2)
 
         return out
 
@@ -758,11 +762,11 @@ class BiochemicalPlotter(Plotter):
         ylim = [-0.5, 2.5]
         npts = 100
 
-        x_tot = x_tot_cond[0].cpu().numpy()    
-        
+        x_tot = x_tot_cond[0].cpu().numpy()
+
         # DENSITY
         # ROLES OF X AND Y inversed when compared to Conditional Sampling.
-        
+
         name_gif = name + 'density'
         plot_paths_reg = []
         for k in range(num_steps):

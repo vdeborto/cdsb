@@ -265,7 +265,7 @@ class IPFBase:
         else:
             sample_net = self.net[sample_direction]
 
-        sample_net = self.accelerator.prepare(sample_net)
+        sample_net = sample_net.to(self.device)
         sample_net.eval()
 
         if forward_or_backward == 'b':
@@ -313,7 +313,7 @@ class IPFBase:
                     torch.save(sample_net.state_dict(), name_net_ckpt)
 
             if not self.args.nosave:
-                sample_net = self.accelerator.prepare(sample_net)
+                sample_net = sample_net.to(self.device)
                 sample_net.eval()
 
                 with torch.no_grad():
@@ -383,7 +383,7 @@ class IPFBase:
             else:
                 sample_net = self.net['f']
 
-            sample_net = self.accelerator.prepare(sample_net)
+            sample_net = sample_net.to(self.device)
         sample_net.eval()
 
         with torch.no_grad():
@@ -403,7 +403,7 @@ class IPFBase:
             else:
                 sample_net = self.net['f']
 
-            sample_net = self.accelerator.prepare(sample_net)
+            sample_net = sample_net.to(self.device)
         sample_net.eval()
 
         with torch.no_grad():
@@ -481,7 +481,7 @@ class IPFSequential(IPFBase):
 
             if self.grad_clipping:
                 clipping_param = self.args.grad_clip
-                total_norm = self.accelerator.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
+                total_norm = torch.nn.utils.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
             else:
                 total_norm = 0.
 
@@ -489,8 +489,8 @@ class IPFSequential(IPFBase):
             if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
                 self.logger.log_metrics({'fb': forward_or_backward,
                                          'ipf': n,
-                                         'loss': loss, 
-                                         'grad_norm': total_norm}, step=i+self.num_iter*(n-1))
+                                         'loss': loss.item(),
+                                         'grad_norm': total_norm.item()}, step=i+self.num_iter*(n-1))
             
             self.optimizer[forward_or_backward].step()
             self.optimizer[forward_or_backward].zero_grad()
@@ -512,12 +512,13 @@ class IPFSequential(IPFBase):
 
     def train(self):
         # INITIAL FORWARD PASS
-        with torch.no_grad():
-            self.set_seed(seed=0 + self.accelerator.process_index)
-            test_metrics = self.plotter(None, 0, 0, 'f')
+        if not self.args.nosave:
+            with torch.no_grad():
+                self.set_seed(seed=0 + self.accelerator.process_index)
+                test_metrics = self.plotter(None, 0, 0, 'f')
 
-            if self.accelerator.is_main_process:
-                self.save_logger.log_metrics(test_metrics, step=0)
+                if self.accelerator.is_main_process:
+                    self.save_logger.log_metrics(test_metrics, step=0)
 
             
         for n in range(self.checkpoint_it, self.n_ipf+1):

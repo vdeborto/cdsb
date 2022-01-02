@@ -386,32 +386,35 @@ class ImPlotter(Plotter):
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                psnr = PSNR(data_range=255.)
-                psnr = psnr(uint8_batch_x, uint8_x_init).item()
-                ssim = SSIM(data_range=255.)
-                ssim = ssim(uint8_batch_x, uint8_x_init).item()
+                psnr = PSNR(data_range=255.).to(self.ipf.device)
+                psnr_result = psnr(uint8_batch_x.to(self.ipf.device), uint8_x_init.to(self.ipf.device)).item()
+                psnr.reset()
 
-                plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr, 2)) + '\n ssim ' + str(
-                    round(ssim, 2)))
+                ssim = SSIM(data_range=255.).to(self.ipf.device)
+                ssim_result = ssim(uint8_batch_x.to(self.ipf.device), uint8_x_init.to(self.ipf.device)).item()
+                ssim.reset()
+
+                plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr_result, 2)) + '\n ssim ' + str(
+                    round(ssim_result, 2)))
                 plt.axis('off')
                 plt.savefig(filename)
                 plt.close()
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
             save_image_with_metrics(x_start[:self.num_plots_grid], filename_grid_png, nrow=10)
-            self.ipf.save_logger.log_image(dl_name + "/im_grid_start", filename_grid_png, step=self.step, fb=fb)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_start", [filename_grid_png], step=self.step, fb=fb)
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
             save_image_with_metrics(x_tot_grid[-1], filename_grid_png, nrow=10)
-            self.ipf.save_logger.log_image(dl_name + "/im_grid_last", filename_grid_png, step=self.step, fb=fb)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_last", [filename_grid_png], step=self.step, fb=fb)
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_x.png')
             save_image_with_metrics(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
-            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_x", filename_grid_png, step=self.step, fb=fb)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_x", [filename_grid_png], step=self.step, fb=fb)
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_data_y.png')
             save_image_with_metrics(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
-            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_y", filename_grid_png, step=self.step, fb=fb)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_y", [filename_grid_png], step=self.step, fb=fb)
 
             if self.plot_level >= 2:
                 plot_paths = []
@@ -485,7 +488,7 @@ class OneDCondPlotter(Plotter):
             plt.ylabel("x")
             plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
 
-            self.ipf.save_logger.log_image(dl_name + '/true_density', filename, step=self.step, fb=fb)
+            self.ipf.save_logger.log_image(dl_name + '/true_density', [filename], step=self.step, fb=fb)
 
         plot_name = 'density'
         name_gif = f'{iter_name}_{plot_name}'
@@ -510,7 +513,7 @@ class OneDCondPlotter(Plotter):
 
         make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
 
-        self.ipf.save_logger.log_image(f'{dl_name}/{plot_name}_last', filename, step=self.step, fb=fb)
+        self.ipf.save_logger.log_image(f'{dl_name}/{plot_name}_last', [filename], step=self.step, fb=fb)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
@@ -585,7 +588,7 @@ class OneDCondPlotter(Plotter):
 
         make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
 
-        self.ipf.save_logger.log_image(f'cond/{plot_name}_last', filename, step=self.step, fb=fb)
+        self.ipf.save_logger.log_image(f'cond/{plot_name}_last', [filename], step=self.step, fb=fb)
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):

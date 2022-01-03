@@ -35,7 +35,7 @@ def main():
         Cond_Stacked_MNIST(task, root=root, load=False, split='test', num_channels=1)
 
     if args.data == 'celeba':
-        root = os.path.join(args.data_dir, 'celeba')
+        root = args.data_dir
         CelebA(root, split='all', download=True)
     
 

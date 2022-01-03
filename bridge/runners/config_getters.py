@@ -177,7 +177,7 @@ def get_datasets(args):
 
 
         data_tag = args.data.dataset
-        root = os.path.join(data_dir, 'celeba')
+        root = data_dir
         init_ds = Cond_CelebA(data_tag, root, split='train', transform=cmp(train_transform), download=False)
 
     # MNIST DATASET
@@ -283,7 +283,7 @@ def get_valid_test_datasets(args):
                           transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         data_tag = args.data.dataset
-        root = os.path.join(data_dir, 'celeba')
+        root = data_dir
         valid_ds = Cond_CelebA(data_tag, root, split='valid', transform=cmp(test_transform), download=False)
         test_ds = Cond_CelebA(data_tag, root, split='test', transform=cmp(test_transform), download=False)
 

@@ -8,7 +8,7 @@ from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
-from ..data.celeba import CelebA
+from ..data.celeba import Cond_CelebA
 from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
@@ -172,14 +172,13 @@ def get_datasets(args):
 
         train_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size),
                            transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-        test_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size),
-                          transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         if args.data.random_flip:
             train_transform.insert(2, transforms.RandomHorizontalFlip())
 
 
+        data_tag = args.data.dataset
         root = os.path.join(data_dir, 'celeba')
-        init_ds = CelebA(root, split='train', transform=cmp(train_transform), download=False)
+        init_ds = Cond_CelebA(data_tag, root, split='train', transform=cmp(train_transform), download=False)
 
     # MNIST DATASET
 
@@ -276,6 +275,17 @@ def get_valid_test_datasets(args):
         load = args.load
         valid_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='valid', num_channels=args.data.channels)
         test_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='test', num_channels=args.data.channels)
+
+    # CELEBA DATASET
+
+    if dataset_tag == DATASET_CELEBA:
+        test_transform = [transforms.CenterCrop(140), transforms.Resize(args.data.image_size),
+                          transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        data_tag = args.data.dataset
+        root = os.path.join(data_dir, 'celeba')
+        valid_ds = Cond_CelebA(data_tag, root, split='valid', transform=cmp(test_transform), download=False)
+        test_ds = Cond_CelebA(data_tag, root, split='test', transform=cmp(test_transform), download=False)
 
     return valid_ds, test_ds
 

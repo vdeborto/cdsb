@@ -111,9 +111,9 @@ class Plotter(object):
                     x_start_cond = torch.stack(x_start_cond, dim=0)
                     x_tot_cond = torch.stack(x_tot_cond, dim=0)
                     self.plot_sequence_cond(x_start_cond[:, :self.args.plot_npar], self.ipf.y_cond, x_tot_cond[:, :, :self.args.plot_npar],
-                                            self.dataset, i, n, fb, x_init_cond=None)
+                                            self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true)
                     out.update(self.test_cond(x_start_cond[:, :self.args.test_npar], self.ipf.y_cond, x_tot_cond[:, :, :self.args.test_npar],
-                                              self.dataset, i, n, fb, x_init_cond=None))
+                                              self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true))
                     out["cond/batch_sample_time"] = np.mean(time_cond)
 
             if not self.args.cond_final:
@@ -139,9 +139,9 @@ class Plotter(object):
                     x_tot_fwdbwd_cond = torch.stack(x_tot_fwdbwd_cond, dim=0)
                     self.plot_sequence_cond_fwdbwd(x_init_cond[:, :self.args.plot_npar], y_init_cond[:, :self.args.plot_npar],
                                                    x_tot_fwd_cond[:, :, :self.args.plot_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.plot_npar],
-                                                   self.dataset, i, n, fb, x_init_cond=None)
+                                                   self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true)
                     out.update(self.test_cond(x_tot_fwd_cond[:, -1, :self.args.test_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.test_npar],
-                                              self.dataset, i, n, fb, x_init_cond=None))
+                                              self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true))
                     out["cond/batch_sample_time_fwdbwd"] = np.mean(time_cond)
 
         torch.cuda.empty_cache()
@@ -398,7 +398,7 @@ class ImPlotter(Plotter):
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                plt.title('IPFP iteration: ' + str(n) + ' \n psnr: ' + str(round(psnr_result, 2)) + '\n ssim ' + str(
+                plt.title('IPFP iteration: ' + str(n) + '\n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
                     round(ssim_result, 2)))
                 plt.axis('off')
                 plt.savefig(filename)
@@ -441,6 +441,110 @@ class ImPlotter(Plotter):
                         plt.clf()
                         filename_png = os.path.join(im_dir, '{:05}.png'.format(k))
                         save_image(x_tot[-1, k], filename_png)
+
+    def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps // min(self.num_steps, 50)
+
+        if self.plot_level >= 1:
+            y_cond = y_cond.cpu()
+            x_init_cond = x_init_cond.cpu() if x_init_cond is not None else None
+
+            iter_name = str(i) + '_' + fb + '_' + str(n)
+            im_dir = os.path.join(self.im_dir, iter_name, "cond")
+            gif_dir = os.path.join(self.gif_dir, "cond")
+
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
+
+            # plot_level 1
+            if x_init_cond is not None:
+                uint8_x_init = to_uint8_tensor(x_init_cond[:self.num_plots_grid])
+
+            def save_image_with_metrics(batch_x, filename):
+                # batch_x shape (y_cond, b, c, h, w)
+                plt.clf()
+                ncol = 10 if x_init_cond is not None else 9
+                plt.figure(figsize=(ncol, batch_x.shape[0]))
+
+                uint8_batch_x = to_uint8_tensor(batch_x)
+                batch_x_mean = batch_x.mean(1)
+                batch_x_std = batch_x.std(1)
+                uint8_batch_x_mean = to_uint8_tensor(batch_x_mean)
+
+                plt_idx = 1
+
+                def subplot_imshow(tensor, plt_idx):
+                    ax = plt.subplot(len(y_cond), ncol, plt_idx)
+                    ax.axis('off')
+                    ax.imshow(tensor.permute(1, 2, 0))
+
+                for j in range(len(y_cond)):
+                    if x_init_cond is not None:
+                        subplot_imshow(uint8_x_init[j].expand(3, -1, -1), plt_idx)
+                        plt_idx += 1
+                    subplot_imshow(to_uint8_tensor(y_cond[j]).expand(3, -1, -1), plt_idx)
+                    plt_idx += 1
+                    for k in range(6):
+                        subplot_imshow(uint8_batch_x[j, k].expand(3, -1, -1), plt_idx)
+                        plt_idx += 1
+                    subplot_imshow(batch_x_mean[j], plt_idx)
+                    plt_idx += 1
+                    subplot_imshow(batch_x_std[j], plt_idx)
+                    plt_idx += 1
+
+                psnr = PSNR(data_range=255.)
+                psnr_result = psnr(uint8_batch_x.flatten(end_dim=1),
+                                   uint8_x_init.unsqueeze(1).expand(-1, batch_x.shape[1], -1, -1, -1).flatten(end_dim=1)).item()
+                psnr.reset()
+                mean_psnr_result = psnr(uint8_batch_x_mean, uint8_x_init).item()
+                psnr.reset()
+
+                ssim = SSIM(data_range=255.)
+                ssim_result = ssim(uint8_batch_x.flatten(end_dim=1),
+                                   uint8_x_init.unsqueeze(1).expand(-1, batch_x.shape[1], -1, -1, -1).flatten(end_dim=1)).item()
+                ssim.reset()
+                mean_ssim_result = ssim(uint8_batch_x_mean, uint8_x_init).item()
+                ssim.reset()
+
+                plt.suptitle('IPFP iteration: ' + str(n) +
+                             '\n psnr: ' + str(round(psnr_result, 2)) + ' mean ssim: ' + str(round(mean_psnr_result, 2)) +
+                             '\n ssim: ' + str(round(ssim_result, 2)) + ' mean ssim: ' + str(round(mean_ssim_result, 2)))
+                plt.savefig(filename)
+                plt.close()
+
+            plot_name = 'cond_im_grid_' + tag
+            name_gif = f'{iter_name}_{plot_name}'
+            filename_grid_png = os.path.join(im_dir, plot_name + '_last.png')
+            save_image_with_metrics(x_tot_cond[:, -1], filename_grid_png)
+            self.ipf.save_logger.log_image(f"cond/{plot_name}_last", [filename_grid_png], step=self.step, fb=fb)
+
+            # if self.plot_level >= 2:
+            #     plot_paths = []
+            #     x_start_tot = torch.cat([x_start.unsqueeze(1), x_tot_cond], dim=1)
+            #     for k in range(self.num_steps+1):
+            #         if k % freq == 0 or k == self.num_steps:
+            #             # save png
+            #             filename_grid_png = os.path.join(im_dir, f'{plot_name}_{k}.png')
+            #             plot_paths.append(filename_grid_png)
+            #             save_image_with_metrics(x_start_tot[:, k], filename_grid_png)
+            #
+            #     make_gif(plot_paths, output_directory=gif_dir, gif_name=name_gif)
+
+            if self.plot_level >= 3:
+                im_dir = os.path.join(im_dir, "im_" + tag)
+                os.makedirs(im_dir, exist_ok=True)
+                for j in range(len(y_cond)):
+                    im_dir_j = os.path.join(im_dir, str(j))
+                    os.mkdir(im_dir_j)
+                    for k in range(x_tot_cond.shape[2]):
+                        plt.clf()
+                        filename_png = os.path.join(im_dir_j, '{:05}.png'.format(k))
+                        save_image(x_tot_cond[j, -1, k], filename_png)
+
+    def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
+                                  x_init_cond=None, tag='fwdbwd', freq=None):
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
 
 
 class OneDCondPlotter(Plotter):
@@ -596,7 +700,7 @@ class OneDCondPlotter(Plotter):
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
-        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
 
     def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', mean_final=None, var_final=None):
         out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, mean_final=mean_final, var_final=var_final)
@@ -709,7 +813,7 @@ class FiveDCondPlotter(Plotter):
 
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
-        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, tag=tag, freq=freq)
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
 
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
         out = super().test_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag)

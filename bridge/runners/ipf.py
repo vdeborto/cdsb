@@ -140,6 +140,20 @@ class IPFBase:
 
                 self.y_cond = torch.stack(self.y_cond, dim=0)
 
+        self.x_cond_true = self.args.x_cond_true
+        if self.x_cond_true is not None:
+            if isinstance(self.x_cond_true, str):
+                self.x_cond_true = eval(self.x_cond_true).to(self.device)
+            else:
+                self.x_cond_true = list(self.x_cond_true)
+                for j in range(len(self.x_cond_true)):
+                    if isinstance(self.x_cond_true[j], str):
+                        self.x_cond_true[j] = eval(self.x_cond_true[j]).to(self.device)
+                    else:
+                        self.x_cond_true[j] = torch.tensor([self.x_cond_true[j]]).to(self.device)
+
+                self.x_cond_true = torch.stack(self.x_cond_true, dim=0)
+
         self.cond_final = self.args.cond_final
         assert (not self.transfer or not self.cond_final)
         if self.cond_final:
@@ -306,11 +320,17 @@ class IPFBase:
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                 torch.save(self.net[fb].state_dict(), name_net_ckpt)
+                if self.args.LOGGER == 'Wandb':
+                    import wandb
+                    wandb.save(name_net_ckpt)
 
                 if self.args.ema:
                     name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                     name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                     torch.save(sample_net.state_dict(), name_net_ckpt)
+                    if self.args.LOGGER == 'Wandb':
+                        import wandb
+                        wandb.save(name_net_ckpt)
 
             if not self.args.nosave:
                 sample_net = sample_net.to(self.device)

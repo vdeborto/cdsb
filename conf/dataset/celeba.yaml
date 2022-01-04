@@ -3,11 +3,12 @@
 # data 
 Dataset: celeba
 data:
-  dataset: "superres_4"
+  dataset: "superres_4_noise_0.2"
   image_size: 64
   channels: 3
   random_flip: true
 y_cond: null
+x_cond_true: null
 
 
 # transfer

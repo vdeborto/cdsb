@@ -9,6 +9,7 @@ y_dim: 1
 data:
   dataset: type1
 y_cond: [-1.2, 0., 1.2]
+x_cond_true: null
 
 # transfer
 transfer: False

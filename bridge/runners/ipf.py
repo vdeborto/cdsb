@@ -35,7 +35,7 @@ class IPFBase:
 
         self.mean_final = mean_final
         self.var_final = var_final
-        self.std_final = torch.sqrt(self.var_final)
+        self.std_final = torch.sqrt(self.var_final) if self.var_final is not None else None
 
         self.transfer = self.args.transfer
 
@@ -489,8 +489,8 @@ class IPFSequential(IPFBase):
             if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
                 self.logger.log_metrics({'fb': forward_or_backward,
                                          'ipf': n,
-                                         'loss': loss.item(),
-                                         'grad_norm': total_norm.item()}, step=i+self.num_iter*(n-1))
+                                         'loss': loss,
+                                         'grad_norm': total_norm}, step=i+self.num_iter*(n-1))
             
             self.optimizer[forward_or_backward].step()
             self.optimizer[forward_or_backward].zero_grad()

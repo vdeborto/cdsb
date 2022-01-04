@@ -49,6 +49,7 @@ class UNetModel(nn.Module):
         num_heads=1,
         num_heads_upsample=-1,
         use_scale_shift_norm=False,
+        resblock_updown=False,
     ):
         super().__init__()
 
@@ -67,7 +68,8 @@ class UNetModel(nn.Module):
                         use_checkpoint,
                         num_heads,
                         num_heads_upsample,
-                        use_scale_shift_norm
+                        use_scale_shift_norm,
+                        resblock_updown
                     ]
         self.in_channels = in_channels
         self.model_channels = model_channels
@@ -85,7 +87,7 @@ class UNetModel(nn.Module):
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
             linear(model_channels, time_embed_dim),
-            SiLU(),
+            nn.SiLU(),
             linear(time_embed_dim, time_embed_dim),
         )
 
@@ -125,8 +127,24 @@ class UNetModel(nn.Module):
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
             if level != len(channel_mult) - 1:
+                out_ch = ch
                 self.input_blocks.append(
-                    TimestepEmbedSequential(Downsample(ch, conv_resample, dims=dims))
+                    TimestepEmbedSequential(
+                        ResBlock(
+                            ch,
+                            time_embed_dim,
+                            dropout,
+                            out_channels=out_ch,
+                            dims=dims,
+                            use_checkpoint=use_checkpoint,
+                            use_scale_shift_norm=use_scale_shift_norm,
+                            down=True,
+                        )
+                        if resblock_updown
+                        else Downsample(
+                            ch, conv_resample, dims=dims, out_channels=out_ch
+                        )
+                    )
                 )
                 input_block_chans.append(ch)
                 ds *= 2
@@ -175,13 +193,27 @@ class UNetModel(nn.Module):
                         )
                     )
                 if level and i == num_res_blocks:
-                    layers.append(Upsample(ch, conv_resample, dims=dims))
+                    out_ch = ch
+                    layers.append(
+                        ResBlock(
+                            ch,
+                            time_embed_dim,
+                            dropout,
+                            out_channels=out_ch,
+                            dims=dims,
+                            use_checkpoint=use_checkpoint,
+                            use_scale_shift_norm=use_scale_shift_norm,
+                            up=True,
+                        )
+                        if resblock_updown
+                        else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch)
+                    )
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
 
         self.out = nn.Sequential(
             normalization(ch),
-            SiLU(),
+            nn.SiLU(),
             zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
         )
 
@@ -230,41 +262,41 @@ class UNetModel(nn.Module):
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            cat_in = th.cat([h, hs.pop()], dim=1)
-            h = module(cat_in, emb)
+            h = th.cat([h, hs.pop()], dim=1)
+            h = module(h, emb)
         h = h.type(x.dtype)
         return self.out(h)
 
-    def get_feature_vectors(self, x, y, timesteps):
-        """
-        Apply the model and return all of the intermediate tensors.
-        :param x: an [N x C x ...] Tensor of inputs.
-        :param timesteps: a 1-D batch of timesteps.
-        :param y: an [N] Tensor of labels, if class-conditional.
-        :return: a dict with the following keys:
-                 - 'down': a list of hidden state tensors from downsampling.
-                 - 'middle': the tensor of the output of the lowest-resolution
-                             block in the model.
-                 - 'up': a list of hidden state tensors from upsampling.
-        """
-        hs = []
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
-        if self.num_classes is not None:
-            assert y.shape == (x.shape[0],)
-            emb = emb + self.label_emb(y)
-        result = dict(down=[], up=[])
-        h = x#.type(self.inner_dtype)
-        for module in self.input_blocks:
-            h = module(h, emb)
-            hs.append(h)
-            result["down"].append(h.type(x.dtype))
-        h = self.middle_block(h, emb)
-        result["middle"] = h.type(x.dtype)
-        for module in self.output_blocks:
-            cat_in = th.cat([h, hs.pop()], dim=1)
-            h = module(cat_in, emb)
-            result["up"].append(h.type(x.dtype))
-        return result
+    # def get_feature_vectors(self, x, y, timesteps):
+    #     """
+    #     Apply the model and return all of the intermediate tensors.
+    #     :param x: an [N x C x ...] Tensor of inputs.
+    #     :param timesteps: a 1-D batch of timesteps.
+    #     :param y: an [N] Tensor of labels, if class-conditional.
+    #     :return: a dict with the following keys:
+    #              - 'down': a list of hidden state tensors from downsampling.
+    #              - 'middle': the tensor of the output of the lowest-resolution
+    #                          block in the model.
+    #              - 'up': a list of hidden state tensors from upsampling.
+    #     """
+    #     hs = []
+    #     emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+    #     if self.num_classes is not None:
+    #         assert y.shape == (x.shape[0],)
+    #         emb = emb + self.label_emb(y)
+    #     result = dict(down=[], up=[])
+    #     h = x#.type(self.inner_dtype)
+    #     for module in self.input_blocks:
+    #         h = module(h, emb)
+    #         hs.append(h)
+    #         result["down"].append(h.type(x.dtype))
+    #     h = self.middle_block(h, emb)
+    #     result["middle"] = h.type(x.dtype)
+    #     for module in self.output_blocks:
+    #         cat_in = th.cat([h, hs.pop()], dim=1)
+    #         h = module(cat_in, emb)
+    #         result["up"].append(h.type(x.dtype))
+    #     return result
 
 
 class SuperResModel(UNetModel):
@@ -283,8 +315,8 @@ class SuperResModel(UNetModel):
         x = th.cat([x, upsampled], dim=1)
         return super().forward(x, None, timesteps, **kwargs)
 
-    def get_feature_vectors(self, x, low_res, timesteps, **kwargs):
-        _, new_height, new_width, _ = x.shape
-        upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
-        x = th.cat([x, upsampled], dim=1)
-        return super().get_feature_vectors(x, None, timesteps, **kwargs)
+    # def get_feature_vectors(self, x, low_res, timesteps, **kwargs):
+    #     _, new_height, new_width, _ = x.shape
+    #     upsampled = F.interpolate(low_res, (new_height, new_width), mode="bilinear")
+    #     x = th.cat([x, upsampled], dim=1)
+    #     return super().get_feature_vectors(x, None, timesteps, **kwargs)

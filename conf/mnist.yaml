@@ -17,9 +17,8 @@ CSV_log_dir: ./
 
 # training
 cache_cpu: True
-num_cache_batches: 10
-cache_refresh_stride: 1000
-test_batch_size: 1000
+cache_refresh_stride: 500
+test_batch_size: 200
 plot_level: 3
 mean_match: True
 paths: 

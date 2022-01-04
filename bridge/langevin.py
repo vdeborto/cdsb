@@ -21,8 +21,8 @@ class Langevin(torch.nn.Module):
         self.device = gammas.device
 
         self.mean_match = mean_match
-        self.mean_final = mean_final.to(self.device)
-        self.var_final = var_final.to(self.device)
+        self.mean_final = mean_final.to(self.device) if mean_final is not None else None
+        self.var_final = var_final.to(self.device) if var_final is not None else None
         
         self.num_steps = num_steps # num diffusion steps
         self.d_x = shape_x # dimension of object to diffuse

@@ -368,7 +368,8 @@ def get_logger(args, name):
         data_tag = args.data.dataset
         config = OmegaConf.to_container(args, resolve=True)
 
-        kwargs = {'name': run_name, 'project': 'cdsb_develop_' + args.Dataset, 'prefix': name, 'tags': [data_tag], 'config': config}
+        kwargs = {'name': run_name, 'project': 'cdsb_develop_' + args.Dataset, 'prefix': name, 'entity': "yuyshi-team",
+                  'tags': [data_tag], 'config': config}
         return WandbLogger(**kwargs)
 
     if logger_tag == NOLOG_TAG:

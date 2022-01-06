@@ -18,12 +18,13 @@ class Cond_CelebA(CelebA):
             factor = int(task[1])
 
             Y = torch.nn.functional.interpolate(X.unsqueeze(0), (imageSize//factor, imageSize//factor), mode='area')
-            Y = torch.nn.functional.interpolate(Y, (imageSize, imageSize)).squeeze(0)
 
             if len(task) > 2:
                 if task[2] == 'noise':
                     std = float(task[3])
                     Y = Y + torch.randn_like(Y) * std
+
+            Y = torch.nn.functional.interpolate(Y, (imageSize, imageSize)).squeeze(0)
 
         else:
             raise NotImplementedError

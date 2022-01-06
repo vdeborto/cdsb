@@ -1,34 +1,13 @@
 # @package _global_
 
 # data 
-Dataset: celeba
+Dataset: stackedmnist
 data:
-  dataset: "superres_4_noise_0.2"
-  image_size: 64
-  channels: 3
-  random_flip: true
-y_cond:
-  - test_ds[0][1]
-  - test_ds[1][1]
-  - test_ds[2][1]
-  - test_ds[3][1]
-  - test_ds[4][1]
-  - test_ds[5][1]
-  - test_ds[6][1]
-  - test_ds[7][1]
-  - test_ds[8][1]
-  - test_ds[9][1]
-x_cond_true:
-  - test_ds[0][0]
-  - test_ds[1][0]
-  - test_ds[2][0]
-  - test_ds[3][0]
-  - test_ds[4][0]
-  - test_ds[5][0]
-  - test_ds[6][0]
-  - test_ds[7][0]
-  - test_ds[8][0]
-  - test_ds[9][0]
+  dataset: "superres_4"
+  image_size: 28
+  channels: 1
+y_cond: null
+x_cond_true: null
 
 
 # transfer
@@ -46,38 +25,39 @@ adaptive_mean: False
 final_adaptive: False
 mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
 var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
+load: True
 
 # device
 device: cuda
-num_workers: 8
+num_workers: 0
 pin_memory: True
 
 # logging
 log_stride: 10
 gif_stride: 5000
-plot_npar: 100
-test_npar: 100
+plot_npar: 10000
+test_npar: 10000
 
 # training
-cache_npar: 300
-num_cache_batches: 4
-use_prev_net: True
+cache_npar: 2000
+num_cache_batches: 1
+use_prev_net: False
 ema: True
 ema_rate: 0.999
 grad_clipping: True
 grad_clip: 1.0
-n_ipf_init: 1
 batch_size: 128
-num_iter: 50000
+num_iter: 5000
 n_ipf: 20
 lr: 0.0001
 
-# diffusion schedule
-num_steps: 50
+# schedule
+num_steps: 30
 gamma_max: 0.1
 gamma_min: 0.00001
 gamma_space: linspace
-weight_distrib: False
+weight_distrib: True
 weight_distrib_alpha: 100
 fast_sampling: True
+
 

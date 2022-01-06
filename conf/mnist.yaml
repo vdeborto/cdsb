@@ -4,7 +4,7 @@ defaults:
   - _self_
   - launcher: slurm_gpu
   - job
-  - dataset: stackedmnist #celeba, 2d, stackedmnist
+  - dataset: mnist_superres #celeba, 2d, stackedmnist
   - model: SuperResUNET #Basic, UNET
   - override hydra/launcher: submitit_slurm
 

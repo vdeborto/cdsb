@@ -111,7 +111,22 @@ def get_final_cond_model(args, init_ds):
         print("Final cond model std:", std)
         final_cond_model = BasicCondGaussian(mean_scale, std)
 
-    return final_cond_model
+    elif model_tag == 'BasicRegress':
+        mean_model, _ = get_models(args)
+        mean_model.load_state_dict(args.cond_final_model.checkpoint)
+        mean_model = mean_model.eval()
+        mean_scale = args.cond_final_model.mean_scale
+        if args.cond_final_model.adaptive_std:
+            with torch.no_grad():
+                batch_x, batch_y = next(iter(DataLoader(init_ds, batch_size=NAPPROX, num_workers=args.num_workers)))
+                pred_x = mean_model(batch_y)
+                std = torch.std(batch_x - pred_x).item() * args.cond_final_model.std_scale
+        else:
+            std = args.cond_final_model.std_scale
+        print("Final cond model std:", std)
+        final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
+
+    return final_cond_model, std
 
 # Optimizer
 #--------------------------------------------------------------------------------

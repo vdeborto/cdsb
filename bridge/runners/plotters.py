@@ -508,7 +508,7 @@ class ImPlotter(Plotter):
                 ssim.reset()
 
                 plt.suptitle('IPFP iteration: ' + str(n) +
-                             '\n psnr: ' + str(round(psnr_result, 2)) + ' mean ssim: ' + str(round(mean_psnr_result, 2)) +
+                             '\n psnr: ' + str(round(psnr_result, 2)) + ' mean psnr: ' + str(round(mean_psnr_result, 2)) +
                              '\n ssim: ' + str(round(ssim_result, 2)) + ' mean ssim: ' + str(round(mean_ssim_result, 2)))
                 plt.savefig(filename)
                 plt.close()

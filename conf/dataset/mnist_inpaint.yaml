@@ -1,14 +1,13 @@
 # @package _global_
 
-# data 
+# data
 Dataset: stackedmnist
 data:
-  dataset: "superres_4"
+  dataset: "inpaint_center"
   image_size: 28
   channels: 1
-y_cond: null
-x_cond_true: null
-
+y_cond: test_ds[:8][1]
+x_cond_true: test_ds[:8][0]
 
 # transfer
 transfer: False
@@ -29,7 +28,7 @@ load: True
 
 # device
 device: cuda
-num_workers: 4
+num_workers: 0
 pin_memory: True
 
 # logging

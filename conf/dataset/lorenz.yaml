@@ -13,6 +13,7 @@ data:
   dataset: type1
 
 y_cond: null
+x_cond_true: null
 
 # transfer
 transfer: False

@@ -467,7 +467,6 @@ class IPFBase:
 
 class IPFSequential(IPFBase):
     def ipf_step(self, forward_or_backward, n):
-        new_dl = None
         new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
         
         if not self.args.use_prev_net:

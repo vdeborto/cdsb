@@ -1,0 +1,69 @@
+# @package _global_
+
+Dataset: lorenz
+nosave: False
+
+x_dim: 5
+y_dim: 3
+
+ens_size: 1000
+
+# conditioning
+data:
+  dataset: type2
+  T: 200
+  x_std: 0.1
+  y_std: 0.01
+  x_0_mean: torch.zeros(${x_dim})
+  x_0_std: torch.ones(${x_dim})
+
+y_cond: null
+x_cond_true: null
+
+# transfer
+transfer: False
+cond_final: False
+
+
+adaptive_mean: True
+final_adaptive: False
+mean_final: torch.zeros(${x_dim})
+var_final: 1.*torch.ones(${x_dim})
+load: False
+
+
+# device
+device: cpu
+num_workers: 0
+pin_memory: False
+
+# training
+use_prev_net: False
+mean_match: False
+ema: False
+ema_rate: 0.999
+grad_clipping: False
+grad_clip: 1.0
+npar: 10000
+batch_size: 500
+num_iter: 5000
+cache_npar: 10000
+n_ipf: 5
+lr: 0.0001
+
+# schedule
+num_steps: 20
+gamma_max: 0.001
+gamma_min: 0.001
+gamma_space: linspace
+weight_distrib: False
+weight_distrib_alpha: 100
+fast_sampling: True
+
+
+# logging
+plot_npar: 1000
+test_npar: 1000
+log_stride: 50
+gif_stride: ${num_iter}
+

@@ -4,7 +4,7 @@ defaults:
   - _self_
   - launcher: slurm_cpu
   - job
-  - dataset: lorenz #celeba, 2d, stackedmnist
+  - dataset: lorenz_63 #celeba, 2d, stackedmnist
   - model: BasicCond #Basic, UNET
   - override hydra/launcher: submitit_slurm
 
@@ -20,7 +20,7 @@ cache_cpu: True
 num_cache_batches: 1
 cache_refresh_stride: 400
 test_batch_size: 1000
-plot_level: 1
+plot_level: 6
 mean_match: True
 paths:
   experiments_dir_name: experiments

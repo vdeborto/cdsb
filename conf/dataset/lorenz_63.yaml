@@ -1,7 +1,7 @@
 # @package _global_
 
 Dataset: lorenz
-nosave: True
+nosave: False
 
 x_dim: 3
 y_dim: 3
@@ -11,6 +11,11 @@ ens_size: 1000
 # conditioning
 data:
   dataset: type1
+  T: 200
+  x_std: 0.01  # 0.01
+  y_std: 2  # 2
+  x_0_mean: torch.tensor([3., -3., 12.])
+  x_0_std: torch.ones(${x_dim})
 
 y_cond: null
 x_cond_true: null
@@ -24,6 +29,7 @@ adaptive_mean: True
 final_adaptive: False
 mean_final: torch.zeros(${x_dim})
 var_final: 1.*torch.ones(${x_dim})
+load: False
 
 
 # device

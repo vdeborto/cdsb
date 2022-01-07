@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as functional
 from torch.utils.data import TensorDataset
 from torch.distributions import Normal, Independent
 from scipy.integrate import solve_ivp, odeint
@@ -35,76 +36,110 @@ def RK45_step(f, t, x, h):
     return x + h*v5
 
 
-def forward_sim(x_0, data):
-    F_fn, G_fn = forward_dist_fn(data)
+def forward_sim(x_0, data, args):
+    F_fn, G_fn = forward_dist_fn(data, args)
     x = F_fn(x_0, None).sample()
     y = G_fn(x, None).sample()
     return x, y
 
 
-def forward_dist_fn(data):
+def forward_dist_fn(data, args):
     if data == 'type1':
         rho = 28.0
         sigma = 10.0
         beta = 8.0 / 3.0
         dt = 0.1
         delta = 0.05
-        y_std = 2
+        x_std = args.data.x_std
+        y_std = args.data.y_std
 
-        def f(t, state):
-            f0 = sigma * (state[..., 1] - state[..., 0])
-            f1 = state[..., 0] * (rho - state[..., 2]) - state[..., 1]
-            f2 = state[..., 0] * state[..., 1] - beta * state[..., 2]
+        def f(t, x):
+            f0 = sigma * (x[..., 1] - x[..., 0])
+            f1 = x[..., 0] * (rho - x[..., 2]) - x[..., 1]
+            f2 = x[..., 0] * x[..., 1] - beta * x[..., 2]
             return torch.stack([f0, f1, f2], -1)
 
         def F_fn(x, t):
             for _ in range(int(dt/delta)):
                 x = RK45_step(f, 0, x, delta)
-            return Independent(Normal(x, 0.01), 1)
+            return Independent(Normal(x, x_std), 1)
 
-        G_fn = lambda x, t: Independent(Normal(x, y_std * torch.ones_like(x)), 1)
+        G_fn = lambda x, t: Independent(Normal(x, y_std), 1)
+
+    elif data == 'type2':
+        xdim = args.x_dim
+        ydim = args.y_dim
+        forcing = 8
+        dt = 0.1
+        delta = 0.01
+        obs_idx = np.sort(np.random.choice(xdim, ydim, replace=False))
+        G = torch.zeros((ydim, xdim))
+        G[torch.arange(ydim), obs_idx] = 1
+        x_std = args.data.x_std
+        y_std = args.data.y_std
+
+        def f(t, x):
+            i = np.arange(xdim)
+            d = (x[..., (i + 1) % xdim] - x[..., i - 2]) * x[..., i - 1] - x[..., i] + forcing
+            return d
+
+        def F_fn(x, t):
+            for _ in range(int(dt/delta)):
+                x = RK4_step(f, 0, x, delta)
+            return Independent(Normal(x, x_std), 1)
+
+        G_fn = lambda x, t: Independent(Normal(functional.linear(x, G), y_std), 1)
 
     return F_fn, G_fn
 
 
-def data_distrib(data):
-    if data == 'type1':
-        T = 4000
-        x_t = torch.tensor([3., -3., 12.]).view(1, 3)
-        x = torch.zeros([0, 3])
-        y = torch.zeros([0, 3])
-        for n in range(T):
-            x_t, y_t = forward_sim(x_t, data)
-            x = torch.cat([x, x_t], 0)
-            y = torch.cat([y, y_t], 0)
+def data_distrib(data, args):
+    T = args.data.T
+    xdim = args.x_dim
+    ydim = args.y_dim
+
+    x = torch.zeros([0, xdim])
+    y = torch.zeros([0, ydim])
+    x_t = eval(args.data.x_0_mean).unsqueeze(0)
+
+    for n in range(T):
+        x_t, y_t = forward_sim(x_t, data, args)
+        x = torch.cat([x, x_t], 0)
+        y = torch.cat([y, y_t], 0)
+
     return x, y
 
 
-def lorenz_process(root, data_tag):
+def lorenz_process(root, data_tag, args):
     data_path = os.path.join(root, data_tag, "data.pt")
-    if os.path.isfile(data_path):
+    if args.load and os.path.isfile(data_path):
         x, y = torch.load(data_path)
         print("Loaded dataset lorenz", data_tag)
+        assert x.shape[0] == y.shape[0] == args.data.T
+        assert x.shape[1] == args.x_dim
+        assert y.shape[1] == args.y_dim
     else:
         os.makedirs(os.path.join(root, data_tag), exist_ok=True)
-        x, y = data_distrib(data_tag)
+        x, y = data_distrib(data_tag, args)
         torch.save([x, y], data_path)
         print("Created new dataset lorenz", data_tag)
 
     gt_filter_path = os.path.join(root, data_tag, "gt_filter.pt")
-    if os.path.isfile(gt_filter_path):
+    if args.load and os.path.isfile(gt_filter_path):
         gt_means, gt_stds = torch.load(gt_filter_path)
+        assert gt_means.shape[0] == gt_stds.shape[0] == args.data.T
+        assert gt_means.shape[1] == gt_stds.shape[1] == args.x_dim
     else:
         T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
-        x_0_mean = torch.tensor([3., -3., 12.])
-        x_0_std = torch.ones([xdim])
+        x_0_mean = eval(args.data.x_0_mean)
+        x_0_std = eval(args.data.x_0_std)
 
         # BPF
         gt_means = torch.zeros([0, xdim])
         gt_stds = torch.zeros([0, xdim])
 
         p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
-        F_fn, G_fn = forward_dist_fn(data_tag)
+        F_fn, G_fn = forward_dist_fn(data_tag, args)
         BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 100000)
 
         for t in tqdm(range(T)):
@@ -131,8 +166,8 @@ def lorenz_process(root, data_tag):
     return x, y, gt_means, gt_stds
 
 
-def lorenz_ds(x_0, data_tag):
-    init_sample_x, init_sample_y = forward_sim(x_0, data_tag)
+def lorenz_ds(x_0, data_tag, args):
+    init_sample_x, init_sample_y = forward_sim(x_0, data_tag, args)
     init_ds = TensorDataset(init_sample_x, init_sample_y)
     return init_ds
 

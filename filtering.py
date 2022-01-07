@@ -31,8 +31,8 @@ def main(args):
     T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
     T_spinup = T // 2    
 
-    x_0_mean = torch.tensor([3., -3., 12.])
-    x_0_std = torch.ones([xdim])
+    x_0_mean = eval(args.data.x_0_mean)
+    x_0_std = eval(args.data.x_0_std)
 
 
     # EnKF
@@ -42,7 +42,7 @@ def main(args):
     filter_rmses_enkf = np.zeros([0])
 
     p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
-    F_fn, G_fn = forward_dist_fn(args.data.dataset)
+    F_fn, G_fn = forward_dist_fn(args.data.dataset, args)
     EnKF = EnsembleKalmanFilter(xdim, ydim, F_fn, G_fn, p_0_dist, args.ens_size)
 
     for t in range(T):
@@ -72,7 +72,7 @@ def main(args):
     for i in range(3):
         plt.subplot(1, 3, i + 1)
         plt.plot(np.arange(T_spinup, T), x[T_spinup:, i], color="C0")
-        plt.plot(np.arange(T_spinup, T), y[T_spinup:, i], 'o', color="C1")
+        # plt.plot(np.arange(T_spinup, T), y[T_spinup:, i], 'o', color="C1")
         plt.plot(np.arange(T_spinup, T), x_ens_means_enkf[T_spinup:, i], '--', color="C2")
         plt.fill_between(np.arange(T_spinup, T),
                          x_ens_means_enkf[T_spinup:, i] - x_ens_stds_enkf[T_spinup:, i],
@@ -162,7 +162,7 @@ def main(args):
                 for i in range(3):
                     plt.subplot(1, 3, i+1)
                     plt.plot(np.arange(T_spinup, t+1), x[T_spinup:t+1, i], color="C0")
-                    plt.plot(np.arange(T_spinup, t+1), y[T_spinup:t+1, i], 'o', color="C1")
+                    # plt.plot(np.arange(T_spinup, t+1), y[T_spinup:t+1, i], 'o', color="C1")
                     plt.plot(np.arange(T_spinup, t+1), x_ens_means[T_spinup:, i], '--', color="C2")
                     plt.fill_between(np.arange(T_spinup, t+1),
                                      x_ens_means[T_spinup:, i] - x_ens_stds[T_spinup:, i],

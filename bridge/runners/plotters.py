@@ -775,6 +775,63 @@ class OneDCondPlotter(Plotter):
         return out
 
 
+class OneDRevCondPlotter(Plotter):
+    def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
+                            mean_final=None, var_final=None):
+        import seaborn as sns
+        if freq is None:
+            freq = self.num_steps // min(self.num_steps, 50)
+        iter_name = str(i) + '_' + fb + '_' + str(n)
+        im_dir = os.path.join(self.im_dir, iter_name, dl_name)
+        gif_dir = os.path.join(self.gif_dir, dl_name)
+
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
+
+        npts = 250
+        xlim = [-3*self.args.data.x_std, 3*self.args.data.x_std]
+        if data == 'type1':
+            ylim = [-1, 6]
+        elif data == 'type4':
+            ylim = [-1 - 3*(self.args.data.x_std+self.args.data.y_std), 1 + 3*(self.args.data.x_std+self.args.data.y_std)]
+
+        # DENSITY
+        # ROLES OF X AND Y inversed when compared to Conditional Sampling.
+
+        x_start = x_start.cpu().numpy()
+        y_start = y_start.cpu().numpy()
+        x_tot = x_tot.cpu().numpy()
+
+        if n == 0 and fb == "f":
+            plt.clf()
+            filename = f'true_density_{dl_name}.png'
+            filename = os.path.join(self.im_dir, filename)
+            g = sns.kdeplot(x=x_start[:, 0], y=y_start[:, 0])
+            g.set(xlim=xlim)
+            g.set(ylim=ylim)
+            plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+
+        plot_name = 'density'
+        name_gif = f'{iter_name}_{plot_name}'
+        plot_paths_reg = []
+        x_start_tot = np.concatenate([np.expand_dims(x_start, axis=0), x_tot], axis=0)
+        for k in range(self.num_steps+1):
+            if k % freq == 0 or k == self.num_steps:
+                filename = plot_name + '_' + str(k) + '.png'
+                filename = os.path.join(im_dir, filename)
+                plt.clf()
+                if n is not None:
+                    str_title = 'IPFP iteration: ' + str(n)
+                    plt.title(str_title)
+                g = sns.kdeplot(x=x_start_tot[k, :, 0], y=y_start[:, 0])
+                g.set(xlim=xlim)
+                g.set(ylim=ylim)
+                plt.savefig(filename, bbox_inches='tight', transparent=True, dpi=DPI)
+                plot_paths_reg.append(filename)
+
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
+
+
 class FiveDCondPlotter(Plotter):
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:

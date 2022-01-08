@@ -72,7 +72,8 @@ def main(args):
     for i in range(3):
         plt.subplot(1, 3, i + 1)
         plt.plot(np.arange(T_spinup, T), x[T_spinup:, i], color="C0")
-        # plt.plot(np.arange(T_spinup, T), y[T_spinup:, i], 'o', color="C1")
+        if xdim == ydim:
+            plt.plot(np.arange(T_spinup, T), y[T_spinup:, i], 'o', color="C1")
         plt.plot(np.arange(T_spinup, T), x_ens_means_enkf[T_spinup:, i], '--', color="C2")
         plt.fill_between(np.arange(T_spinup, T),
                          x_ens_means_enkf[T_spinup:, i] - x_ens_stds_enkf[T_spinup:, i],
@@ -129,7 +130,6 @@ def main(args):
 
             ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
             if t == T_spinup:
-                ipf.accelerator.print(ipf.accelerator.state)
                 ipf.accelerator.print(ipf.net['b'])
                 ipf.accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
             ipf.train()
@@ -162,7 +162,8 @@ def main(args):
                 for i in range(3):
                     plt.subplot(1, 3, i+1)
                     plt.plot(np.arange(T_spinup, t+1), x[T_spinup:t+1, i], color="C0")
-                    # plt.plot(np.arange(T_spinup, t+1), y[T_spinup:t+1, i], 'o', color="C1")
+                    if xdim == ydim:
+                        plt.plot(np.arange(T_spinup, t+1), y[T_spinup:t+1, i], 'o', color="C1")
                     plt.plot(np.arange(T_spinup, t+1), x_ens_means[T_spinup:, i], '--', color="C2")
                     plt.fill_between(np.arange(T_spinup, t+1),
                                      x_ens_means[T_spinup:, i] - x_ens_stds[T_spinup:, i],

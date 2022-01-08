@@ -4,12 +4,13 @@ import hydra
 from ..models import *
 # from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
+from ..data.one_dim_rev_cond import one_dim_rev_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba import Cond_CelebA
-from .plotters import Plotter, OneDCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
+from .plotters import Plotter, OneDCondPlotter, OneDRevCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -22,6 +23,8 @@ def get_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
     if dataset_tag == DATASET_1D_COND:
         return OneDCondPlotter(runner, args)
+    if dataset_tag == DATASET_1D_REV_COND:
+        return OneDRevCondPlotter(runner, args)
     elif dataset_tag == DATASET_5D_COND:
         return FiveDCondPlotter(runner, args)
     elif dataset_tag == DATASET_BIOCHEMICAL:
@@ -141,6 +144,7 @@ def get_optimizer(net, lr):
 DATASET = 'Dataset'
 DATASET_TRANSFER = 'Dataset_transfer'
 DATASET_1D_COND = '1d_cond'
+DATASET_1D_REV_COND = '1d_rev_cond'
 DATASET_5D_COND = '5d_cond'
 DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_LORENZ = 'lorenz'
@@ -171,8 +175,18 @@ def get_datasets(args):
         data_tag = args.data.dataset
         npar = args.npar
         root = os.path.join(data_dir, '1d_cond')
-        init_ds = one_dim_cond_ds(root, npar, data_tag)    
-    
+        init_ds = one_dim_cond_ds(root, npar, data_tag)
+
+    # 1D REV CONDITIONAL DATASET
+
+    if dataset_tag == DATASET_1D_REV_COND:
+        assert args.x_dim == 1
+        assert args.y_dim == 1
+        data_tag = args.data.dataset
+        npar = args.npar
+        root = os.path.join(data_dir, '1d_rev_cond')
+        init_ds = one_dim_rev_cond_ds(root, npar, data_tag, args)
+
     # 5D CONDITIONAL DATASET
     
     if dataset_tag == DATASET_5D_COND:

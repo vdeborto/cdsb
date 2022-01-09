@@ -1,15 +1,15 @@
 # @package hydra.launcher
 submitit_folder: ${hydra.sweep.dir}/.submitit/%j
 timeout_min: 10000
-cpus_per_task: 1
+cpus_per_task: 8
 tasks_per_node: 1
-mem_gb: 14
+mem_gb: 64
 name: ${hydra.job.name}
-partition: ziz-gpu
+partition: ziz-gpu-titan
 max_num_timeout: 0
 array_parallelism: 5
 additional_parameters: {
   "wckey": "bigbayes_project",
   "gres": "gpu:1",
-  "nodelist": "zizgpu03.cpu.stats.ox.ac.uk",
+  "nodelist": "zizgpu05.cpu.stats.ox.ac.uk",
 }

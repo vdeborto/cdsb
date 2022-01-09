@@ -11,11 +11,12 @@ ens_size: 1000
 # conditioning
 data:
   dataset: type1
-  T: 200
+  T: 4000
   x_std: 0.01  # 0.01
   y_std: 2  # 2
   x_0_mean: torch.tensor([3., -3., 12.])
   x_0_std: torch.ones(${x_dim})
+load: True
 
 y_cond: null
 x_cond_true: null
@@ -25,11 +26,11 @@ transfer: False
 cond_final: False
 
 
-adaptive_mean: True
-final_adaptive: False
+adaptive_mean: False
+final_adaptive: True
+final_var_scale: 1.
 mean_final: torch.zeros(${x_dim})
 var_final: 1.*torch.ones(${x_dim})
-load: False
 
 
 # device
@@ -59,11 +60,13 @@ gamma_space: linspace
 weight_distrib: False
 weight_distrib_alpha: 100
 fast_sampling: True
+var_final_gamma_scale: True
+double_gamma_scale: False
 
 
 # logging
-plot_npar: 1000
-test_npar: 1000
+plot_npar: 500
+test_npar: 500
 log_stride: 50
 gif_stride: ${num_iter}
 

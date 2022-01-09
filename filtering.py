@@ -146,6 +146,9 @@ def main(args):
                         init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
                         init_x, init_y = init_ds.tensors
                         x_ens = ipf.forward_backward_sample(init_x, init_y, y[t], args.n_ipf, 'f')[-1].cpu()
+                        # std_final = torch.sqrt(var_final)
+                        # final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
+                        # x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
 
                 x_ens_means = np.row_stack([x_ens_means, x_ens.mean(0).numpy()])
                 x_ens_stds = np.row_stack([x_ens_stds, x_ens.std(0).numpy()])

@@ -23,7 +23,8 @@ cond_final: False
 
 
 adaptive_mean: False
-final_adaptive: False
+final_adaptive: True
+final_var_scale: 1.
 mean_final: torch.tensor([0.])
 var_final: 1.*torch.tensor([1.])
 
@@ -55,11 +56,13 @@ gamma_space: linspace
 weight_distrib: False
 weight_distrib_alpha: 100
 fast_sampling: True
+var_final_gamma_scale: True
+double_gamma_scale: False
 
 
 # logging
-plot_npar: 1000
-test_npar: 1000
+plot_npar: 500
+test_npar: 500
 log_stride: 50
 gif_stride: ${num_iter}
 

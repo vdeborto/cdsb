@@ -26,7 +26,7 @@ paths:
   experiments_dir_name: experiments
   data_dir_name: data
 
-langevin_scale: 2*torch.sqrt(2*gamma)
+langevin_scale: 2*torch.sqrt(gamma)
 
 # checkpoint
 checkpoint_run: False

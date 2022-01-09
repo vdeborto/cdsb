@@ -1,22 +1,18 @@
-import copy
 import torch
-import torch.nn.functional as F
-from tqdm import tqdm
-import os
-import numpy as np 
 
 def grad_gauss(x, m, var):
-    xout = (x - m) / var
-    return -xout
-
-def ornstein_ulhenbeck(x, gradx, gamma):
-    xout = x + gamma * gradx + torch.sqrt(2 * gamma) * torch.randn(x.shape, device=x.device)
+    xout = (m - x) / var
     return xout
+
+# def ornstein_ulhenbeck(x, gradx, gamma):
+#     xout = x + gamma * gradx + torch.sqrt(2 * gamma) * torch.randn(x.shape, device=x.device)
+#     return xout
 
 class Langevin(torch.nn.Module):
 
     def __init__(self, num_steps, shape_x, shape_y, gammas, time_sampler,
-                 mean_final=torch.tensor([0.,0.]), var_final=torch.tensor([.5, .5]), mean_match=True, out_scale=1):
+                 mean_final=torch.tensor([0., 0.]), var_final=torch.tensor([.5, .5]), 
+                 mean_match=True, out_scale=1, var_final_gamma_scale=False, double_gamma_scale=True):
         super().__init__()
         self.device = gammas.device
 
@@ -38,6 +34,8 @@ class Langevin(torch.nn.Module):
         self.time = torch.cumsum(self.gammas, 0).to(self.device)
         self.time_sampler = time_sampler
         self.out_scale = out_scale
+        self.var_final_gamma_scale = var_final_gamma_scale
+        self.double_gamma_scale = double_gamma_scale
             
 
     def record_init_langevin(self, init_samples_x, init_samples_y, mean_final=None, var_final=None):
@@ -60,12 +58,18 @@ class Langevin(torch.nn.Module):
         
         for k in range(num_iter):
             gamma = self.gammas[k]
-            gradx = grad_gauss(x, mean_final, var_final)
-            t_old = x + gamma * gradx
+            if self.double_gamma_scale:
+                gamma = gamma * 2
+            scaled_gamma = gamma
+            if self.var_final_gamma_scale:
+                scaled_gamma = scaled_gamma * var_final
+            
+            gradx = grad_gauss(x, mean_final, var_final/scaled_gamma)
+            t_old = x + gradx / 2
             z = torch.randn(x.shape, device=x.device)
-            x = t_old + torch.sqrt(2 * gamma)*z
-            gradx = grad_gauss(x, mean_final, var_final)
-            t_new = x + gamma * gradx
+            x = t_old + torch.sqrt(scaled_gamma)*z
+            gradx = grad_gauss(x, mean_final, var_final/scaled_gamma)
+            t_new = x + gradx / 2
             x_tot[:, k, :] = x
             y_tot[:, k, :] = y
             if self.mean_match:
@@ -77,6 +81,8 @@ class Langevin(torch.nn.Module):
         return x_tot, y_tot, out, steps_expanded
 
     def record_langevin_seq(self, net, init_samples_x, init_samples_y, sample=False):
+        var_final = self.var_final
+
         x = init_samples_x
         y = init_samples_y
         N = x.shape[0]
@@ -91,14 +97,20 @@ class Langevin(torch.nn.Module):
         
         if self.mean_match:
             for k in range(num_iter):
-                gamma = self.gammas[k]    
+                gamma = self.gammas[k]
+                if self.double_gamma_scale:
+                    gamma = gamma * 2
+                scaled_gamma = gamma
+                if self.var_final_gamma_scale:
+                    scaled_gamma = scaled_gamma * var_final
+
                 t_old = net(x, y, steps[:, k, :])
                 
                 if sample & (k==num_iter-1):
                     x = t_old
                 else:
                     z = torch.randn(x.shape, device=x.device)
-                    x = t_old + torch.sqrt(2 * gamma) * z
+                    x = t_old + torch.sqrt(scaled_gamma) * z
                     
                 t_new = net(x, y, steps[:, k, :])
                 x_tot[:, k, :] = x
@@ -107,6 +119,11 @@ class Langevin(torch.nn.Module):
         else:
             for k in range(num_iter):
                 gamma = self.gammas[k]
+                if self.double_gamma_scale:
+                    gamma = gamma * 2
+                scaled_gamma = gamma
+                if self.var_final_gamma_scale:
+                    scaled_gamma = scaled_gamma * var_final
                 out_scale = eval(self.out_scale).to(self.device) if isinstance(self.out_scale, str) else self.out_scale
 
                 t_old = x + out_scale * net(x, y, steps[:, k, :])
@@ -115,7 +132,7 @@ class Langevin(torch.nn.Module):
                     x = t_old
                 else:
                     z = torch.randn(x.shape, device=x.device)
-                    x = t_old + torch.sqrt(2 * gamma) * z
+                    x = t_old + torch.sqrt(scaled_gamma) * z
                 t_new = x + out_scale * net(x, y, steps[:, k, :])
                 
                 x_tot[:, k, :] = x

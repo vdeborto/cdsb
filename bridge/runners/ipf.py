@@ -57,6 +57,7 @@ class IPFBase:
         self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
         self.gammas = torch.tensor(self.gammas).to(self.device)
         self.T = torch.sum(self.gammas)
+        self.accelerator.print("T:", self.T.item())
 
         # get models
         self.build_models()
@@ -104,7 +105,8 @@ class IPFBase:
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
 
-        self.plotter = self.get_plotter()
+        if not self.args.nosave:
+            self.plotter = self.get_plotter()
         if self.accelerator.is_main_process:
 
             ckpt_dir = './checkpoints/'
@@ -399,9 +401,9 @@ class IPFBase:
     def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None):
         if sample_net is None:
             if self.args.ema:
-                sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
+                sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
             else:
-                sample_net = self.net['f']
+                sample_net = self.net['b']
 
             sample_net = sample_net.to(self.device)
         sample_net.eval()

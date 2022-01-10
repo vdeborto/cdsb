@@ -11,6 +11,8 @@ defaults:
 name: ${Dataset}_${data.dataset}
 nosave: False
 
+EnKF_run: False
+
 # logging
 LOGGER: CSV  # CSV, Wandb, NONE
 CSV_log_dir: ./

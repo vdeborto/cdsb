@@ -1,7 +1,7 @@
 # @package _global_
 
 Dataset: lorenz
-nosave: False
+nosave: True
 
 x_dim: 3
 y_dim: 3
@@ -24,6 +24,7 @@ x_cond_true: null
 # transfer
 transfer: False
 cond_final: False
+update_cond_final_ens: False
 
 
 adaptive_mean: False
@@ -39,7 +40,7 @@ num_workers: 0
 pin_memory: False
 
 # training
-use_prev_net: False
+use_prev_net: True
 mean_match: False
 ema: False
 ema_rate: 0.999

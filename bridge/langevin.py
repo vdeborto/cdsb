@@ -32,7 +32,7 @@ class Langevin(torch.nn.Module):
 
         self.steps = torch.arange(self.num_steps).to(self.device)
         self.time = torch.cumsum(self.gammas, 0).to(self.device)
-        self.time_sampler = time_sampler
+        # self.time_sampler = time_sampler
         self.out_scale = out_scale
         self.var_final_gamma_scale = var_final_gamma_scale
         self.double_gamma_scale = double_gamma_scale

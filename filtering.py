@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 sys.path.append('..')
 
-from bridge.runners.ipf import IPFSequential
+from bridge.runners.ipf import IPFSequential, IPFAnalytic
 from bridge.runners.config_getters import get_filtering_datasets, get_filtering_process
 from bridge.data.lorenz import forward_dist_fn
 from bridge.models.cond import EnsembleKalmanFilter
@@ -151,7 +151,10 @@ def main(args):
                 print("Prior mean:", init_ds_repeat.tensors[0].mean(0).numpy())
                 print("Prior std:", init_ds_repeat.tensors[0].std(0).numpy())
 
-                ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
+                if args.Model in ['PolyCond', 'KRRCond']:
+                    ipf = IPFAnalytic(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
+                else:
+                    ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
                 if t == T_spinup:
                     ipf.accelerator.print(ipf.net['b'])
                     ipf.accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
@@ -166,10 +169,12 @@ def main(args):
                         else:
                             init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
                             init_x, init_y = init_ds.tensors
-                            x_ens = ipf.forward_backward_sample(init_x, init_y, y[t], args.n_ipf, 'f')[-1].cpu()
-                            # std_final = torch.sqrt(var_final)
-                            # final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
-                            # x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
+                            if args.fwd_bwd_sample:
+                                x_ens = ipf.forward_backward_sample(init_x, init_y, y[t], args.n_ipf, 'f')[-1].cpu()
+                            else:
+                                std_final = torch.sqrt(var_final)
+                                final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
+                                x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
 
                     x_ens_means = np.row_stack([x_ens_means, x_ens.mean(0).numpy()])
                     x_ens_stds = np.row_stack([x_ens_stds, x_ens.std(0).numpy()])
@@ -212,7 +217,6 @@ def main(args):
                     plt.plot(np.arange(T_spinup, t+1), filter_rmses_enkf[T_spinup:t+1], label=f'EnKF (Filter RMSE {np.mean(filter_rmses_enkf[T_spinup:t+1])})')
                     plt.legend()
                     plt.savefig("im/filter_rmse.png")
-                    plt.close()
 
                     plt.clf()
                     plt.plot(np.arange(T_spinup, t+1), filter_std_rmses[T_spinup:], label=f'CDSB (Filter std RMSE {np.mean(filter_std_rmses[T_spinup:])})')

@@ -14,6 +14,7 @@ from .plotters import Plotter, OneDCondPlotter, OneDRevCondPlotter, FiveDCondPlo
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
+from functools import partial
 from .logger import CSVLogger, WandbLogger, Logger
 from torch.utils.data import DataLoader
 cmp = lambda x: transforms.Compose([*x])
@@ -41,6 +42,8 @@ def get_plotter(runner, args):
 MODEL = 'Model'
 BASIC_MODEL_COND = 'BasicCond'
 SUPERRES_UNET_MODEL = 'SuperResUNET'
+POLY_MODEL_COND = 'PolyCond'
+KRR_MODEL_COND = 'KRRCond'
 
 NAPPROX = 2000
 
@@ -96,6 +99,22 @@ def get_models(args):
 
         net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)
 
+    if model_tag == POLY_MODEL_COND:
+        x_dim = args.x_dim
+        y_dim = args.y_dim
+        x_deg = args.model.x_deg
+        y_deg = args.model.y_deg
+        net_f, net_b = DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise), \
+                       DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise)
+
+    if model_tag == KRR_MODEL_COND:
+        x_dim = args.x_dim
+        y_dim = args.y_dim
+        kernel_fn = partial(MaternKernel, sigma=args.model.sigma, lam=args.model.lam,
+                            train_sigma=args.model.train_sigma, train_lam=args.model.train_lam)
+        net_f, net_b = KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr), \
+                       KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr)
+
     return net_f, net_b
 
 
@@ -129,7 +148,7 @@ def get_final_cond_model(args, init_ds):
         print("Final cond model std:", std)
         final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
 
-    return final_cond_model, std
+    return final_cond_model
 
 # Optimizer
 #--------------------------------------------------------------------------------
@@ -371,7 +390,17 @@ def get_filtering_datasets(x_tm1, args):
     #         var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
 
     if not args.transfer:
-        if args.adaptive_mean:
+        if args.cond_final:
+            if args.adaptive_mean:
+                mean_final = None
+                var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
+            elif args.final_adaptive:
+                mean_final = None
+                var_final = None
+            else:
+                mean_final = eval(args.mean_final) if isinstance(args.mean_final, str) else torch.tensor([args.mean_final])
+                var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])
+        elif args.adaptive_mean:
             vec = next(iter(DataLoader(init_ds, batch_size=NAPPROX, num_workers=args.num_workers)))[0]
             mean_final = vec.mean(axis=0)
             var_final = eval(args.var_final) if isinstance(args.var_final, str) else torch.tensor([args.var_final])

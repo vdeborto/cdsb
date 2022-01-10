@@ -1,0 +1,12 @@
+# @package _global_
+
+# model
+Model: KRRCond
+model:
+    train_sigma: False
+    train_lam: False
+    sigma: 1.
+    lam: 0.01
+
+num_iter: 50
+lr: 0.005

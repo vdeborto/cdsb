@@ -12,6 +12,7 @@ name: ${Dataset}_${data.dataset}
 nosave: False
 
 EnKF_run: False
+fwd_bwd_sample: True
 
 # logging
 LOGGER: CSV  # CSV, Wandb, NONE

@@ -1,0 +1,9 @@
+# @package _global_
+
+# model
+Model: PolyCond
+model:
+    x_deg: 1
+    y_deg: 1
+    x_dimwise: False
+    y_dimwise: False

@@ -309,42 +309,28 @@ class IPFBase:
         new_dl = repeater(new_dl)
         return new_dl
 
-    def train(self):
+    def ipf_step(self, forward_or_backward, n):
         pass
 
-    def save_step(self, i, n, fb):
-        if i == 1 or i % self.stride == 0 or i == self.num_iter:
-            if self.args.ema:
-                sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
+    def train(self):
+        # INITIAL FORWARD PASS
+        if not self.args.nosave:
+            with torch.no_grad():
+                self.set_seed(seed=0 + self.accelerator.process_index)
+                test_metrics = self.plotter(None, 0, 0, 'f')
+
+                if self.accelerator.is_main_process:
+                    self.save_logger.log_metrics(test_metrics, step=0)
+
+        for n in range(self.checkpoint_it, self.n_ipf + 1):
+
+            self.accelerator.print('IPF iteration: ' + str(n) + '/' + str(self.n_ipf))
+            # BACKWARD OPTIMISATION
+            if (self.checkpoint_pass == 'f') and (n == self.checkpoint_it):
+                self.ipf_step('f', n)
             else:
-                sample_net = self.net[fb]
-
-            if self.accelerator.is_main_process:
-                name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
-                name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-                torch.save(self.net[fb].state_dict(), name_net_ckpt)
-                if self.args.LOGGER == 'Wandb':
-                    import wandb
-                    wandb.save(name_net_ckpt)
-
-                if self.args.ema:
-                    name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
-                    name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-                    torch.save(sample_net.state_dict(), name_net_ckpt)
-                    if self.args.LOGGER == 'Wandb':
-                        import wandb
-                        wandb.save(name_net_ckpt)
-
-            if not self.args.nosave:
-                sample_net = sample_net.to(self.device)
-                sample_net.eval()
-
-                with torch.no_grad():
-                    self.set_seed(seed=0 + self.accelerator.process_index)
-                    test_metrics = self.plotter(sample_net, i, n, fb)
-
-                    if self.accelerator.is_main_process:
-                        self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
+                self.ipf_step('b', n)
+                self.ipf_step('f', n)
 
     def sample_batch(self, init_dl, final_dl, fb, y_c=None):
         mean_final = self.mean_final
@@ -469,6 +455,40 @@ class IPFBase:
 
 
 class IPFSequential(IPFBase):
+    def save_step(self, i, n, fb):
+        if i == 1 or i % self.stride == 0 or i == self.num_iter:
+            if self.args.ema:
+                sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
+            else:
+                sample_net = self.net[fb]
+
+            if self.accelerator.is_main_process:
+                name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
+                name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
+                torch.save(self.net[fb].state_dict(), name_net_ckpt)
+                if self.args.LOGGER == 'Wandb':
+                    import wandb
+                    wandb.save(name_net_ckpt)
+
+                if self.args.ema:
+                    name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
+                    name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
+                    torch.save(sample_net.state_dict(), name_net_ckpt)
+                    if self.args.LOGGER == 'Wandb':
+                        import wandb
+                        wandb.save(name_net_ckpt)
+
+            if not self.args.nosave:
+                sample_net = sample_net.to(self.device)
+                sample_net.eval()
+
+                with torch.no_grad():
+                    self.set_seed(seed=0 + self.accelerator.process_index)
+                    test_metrics = self.plotter(sample_net, i, n, fb)
+
+                    if self.accelerator.is_main_process:
+                        self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
+
     def ipf_step(self, forward_or_backward, n):
         new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
         
@@ -532,25 +552,57 @@ class IPFSequential(IPFBase):
         self.net[forward_or_backward] = self.accelerator.unwrap_model(self.net[forward_or_backward])
         self.clear()
 
-    def train(self):
-        # INITIAL FORWARD PASS
+
+class IPFAnalytic(IPFBase):
+    def new_cacheloader(self, forward_or_backward, n, use_ema=True):
+        sample_direction = 'f' if forward_or_backward == 'b' else 'b'
+        if use_ema:
+            sample_net = self.ema_helpers[sample_direction].ema_copy(self.net[sample_direction])
+        else:
+            sample_net = self.net[sample_direction]
+
+        sample_net = sample_net.to(self.device)
+        sample_net.eval()
+
+        if forward_or_backward == 'b':
+            new_ds = CacheLoader('b',
+                                 sample_net,
+                                 self.cache_init_dl,
+                                 self.cache_final_dl,
+                                 self.args.num_cache_batches,
+                                 self.langevin, self, n,
+                                 device='cpu' if self.args.cache_cpu else self.device)
+
+        else:  # forward
+            new_ds = CacheLoader('f',
+                                 sample_net,
+                                 self.cache_init_dl,
+                                 self.cache_final_dl,
+                                 self.args.num_cache_batches,
+                                 self.langevin, self, n,
+                                 device='cpu' if self.args.cache_cpu else self.device)
+
+        return new_ds
+
+    def ipf_step(self, forward_or_backward, n):
+        new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
+
+        if not self.args.use_prev_net:
+            self.build_models(forward_or_backward)
+
+        x, y, out, steps_expanded = new_dl.tensors
+        eval_steps = self.num_steps - 1 - steps_expanded
+
+        if self.args.mean_match:
+            self.net[forward_or_backward].fit(x, y, out + x, eval_steps)
+        else:
+            self.net[forward_or_backward].fit(x, y, out, eval_steps)
+
         if not self.args.nosave:
             with torch.no_grad():
                 self.set_seed(seed=0 + self.accelerator.process_index)
-                test_metrics = self.plotter(None, 0, 0, 'f')
+                test_metrics = self.plotter(self.net[forward_or_backward], 1, n, forward_or_backward)
 
                 if self.accelerator.is_main_process:
                     self.save_logger.log_metrics(test_metrics, step=0)
 
-            
-        for n in range(self.checkpoint_it, self.n_ipf+1):
-            
-            self.accelerator.print('IPF iteration: ' + str(n) + '/' + str(self.n_ipf))
-            # BACKWARD OPTIMISATION
-            if (self.checkpoint_pass == 'f') and (n == self.checkpoint_it):
-                self.ipf_step('f', n)
-            else:
-                self.ipf_step('b', n)
-                self.ipf_step('f', n)
-
-    

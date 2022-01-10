@@ -29,7 +29,7 @@ update_cond_final_ens: False
 
 adaptive_mean: False
 final_adaptive: True
-final_var_scale: 1.
+final_var_scale: 1.  # Only effective when cond_final is False and final_adaptive is True
 mean_final: torch.zeros(${x_dim})
 var_final: 1.*torch.ones(${x_dim})
 
@@ -54,8 +54,8 @@ n_ipf: 5
 lr: 0.0001
 
 # schedule
-num_steps: 20
-gamma_max: 0.001
+num_steps: 100
+gamma_max: 0.05
 gamma_min: 0.001
 gamma_space: linspace
 weight_distrib: False

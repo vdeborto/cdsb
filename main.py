@@ -4,7 +4,7 @@ import os, sys
 
 sys.path.append('..')
 
-from bridge.runners.ipf import IPFSequential
+from bridge.runners.ipf import IPFSequential, IPFAnalytic
 from bridge.runners.config_getters import get_datasets, get_valid_test_datasets, get_final_cond_model
 
 from accelerate import Accelerator
@@ -22,12 +22,13 @@ def main(args):
 
     final_cond_model = None
     if args.cond_final:
-        final_cond_model, std_final = get_final_cond_model(args, init_ds)
-        if std_final is not None:
-            var_final = torch.tensor([std_final**2])
-
-    ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
-                        final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
+        final_cond_model = get_final_cond_model(args, init_ds)
+    if args.Model in ['PolyCond', 'KRRCond']:
+        ipf = IPFAnalytic(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
+                          final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
+    else:
+        ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
+                            final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))

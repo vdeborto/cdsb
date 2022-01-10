@@ -24,7 +24,7 @@ def main(args):
     if args.cond_final:
         final_cond_model, std_final = get_final_cond_model(args, init_ds)
         if std_final is not None:
-            var_final = std_final.std**2
+            var_final = torch.tensor([std_final**2])
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
                         final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)

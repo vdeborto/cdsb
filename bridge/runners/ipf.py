@@ -363,7 +363,6 @@ class IPFBase:
             batch_y = init_batch[1]
             if y_c is not None:
                 batch_y = y_c.to(batch_y.device) + torch.zeros_like(batch_y)
-                init_batch_x = None
             mean, std = self.final_cond_model(batch_y)
             batch_x = mean + std * torch.randn_like(init_batch_x)
 

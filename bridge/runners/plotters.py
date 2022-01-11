@@ -174,7 +174,7 @@ class Plotter(object):
                     assert fb == 'f'
                     x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
                 else:
-                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True)
+                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True, var_final=var_final)
 
                 stop = time.time()
                 times.append(stop - start)
@@ -239,8 +239,8 @@ class Plotter(object):
         if y_c is not None and fb == 'b':
             start = time.time()
 
-            batch_x, _, _, _, _ = self.ipf.sample_batch(dl, self.ipf.save_final_dl, fb, y_c=y_c)
-            x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net)
+            batch_x, _, _, _, var_final = self.ipf.sample_batch(dl, self.ipf.save_final_dl, fb, y_c=y_c)
+            x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net, var_final=var_final)
 
             gather_batch_x = self.ipf.accelerator.gather(batch_x).cpu()
             gather_x_tot_c = self.ipf.accelerator.gather(x_tot_c).cpu()
@@ -985,7 +985,7 @@ class BiochemicalPlotter(Plotter):
         name_gif = name + 'density'
         plot_paths_reg = []
         for k in range(num_steps):
-            if k % freq == 0:
+            if k % freq == 0 or k == num_steps:
                 filename =  name + 'density_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
                 plt.clf()            

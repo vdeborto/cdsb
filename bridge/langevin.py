@@ -80,8 +80,9 @@ class Langevin(torch.nn.Module):
             
         return x_tot, y_tot, out, steps_expanded
 
-    def record_langevin_seq(self, net, init_samples_x, init_samples_y, sample=False):
-        var_final = self.var_final
+    def record_langevin_seq(self, net, init_samples_x, init_samples_y, sample=False, var_final=None):
+        if var_final is None:
+            var_final = self.var_final
 
         x = init_samples_x
         y = init_samples_y

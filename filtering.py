@@ -165,7 +165,8 @@ def main(args):
                         if args.cond_final:
                             mean_final, std_final = EnKF(y[t].to(ipf.device))
                             final_x = mean_final + std_final * torch.randn(x_ens.shape).to(ipf.device)
-                            x_ens = ipf.backward_sample(final_x, y[t])[-1].cpu()
+                            var_final = std_final ** 2
+                            x_ens = ipf.backward_sample(final_x, y[t], var_final=var_final)[-1].cpu()
                         else:
                             init_ds, _, _, _ = get_filtering_datasets(x_ens, args)
                             init_x, init_y = init_ds.tensors

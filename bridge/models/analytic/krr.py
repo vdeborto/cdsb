@@ -92,9 +92,10 @@ class KernelRidgeRegressor(nn.Module):
             linear_out_train = self.linear_model(x_train, y_train, torch.tensor([[k]]))
             out_train = out_train - linear_out_train
 
-            t_len = x_train.shape[0]
-            x_train, x_valid = x_train.split([t_len - t_len//5, t_len//5])
-            out_train, out_valid = out_train.split([t_len - t_len//5, t_len//5])
+            if self.kernels[k].train_sigma or self.kernels[k].train_lam:
+                t_len = x_train.shape[0]
+                x_train, x_valid = x_train.split([t_len - t_len//5, t_len//5])
+                out_train, out_valid = out_train.split([t_len - t_len//5, t_len//5])
 
             self.xs.append(x_train)
             self.outs.append(out_train)

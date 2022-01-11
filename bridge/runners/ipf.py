@@ -385,7 +385,7 @@ class IPFBase:
         var_final = std_final ** 2
         return batch_x, batch_y, init_batch_x, mean_final, var_final
 
-    def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None):
+    def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None, var_final=None):
         if sample_net is None:
             if self.args.ema:
                 sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
@@ -399,7 +399,7 @@ class IPFBase:
             # self.set_seed(seed=0 + self.accelerator.process_index)
             final_batch_x = final_batch_x.to(self.device)
             y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
-            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True)
+            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True, var_final=var_final)
 
             x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
 
@@ -419,15 +419,16 @@ class IPFBase:
             # self.set_seed(seed=0 + self.accelerator.process_index)
             init_batch_x = init_batch_x.to(self.device)
             init_batch_y = init_batch_y.to(self.device)
+            assert not self.cond_final
+            mean_final = self.mean_final.to(self.device)
+            var_final = self.var_final.to(self.device)
             if n == 1 and fb == "b":
-                assert not self.cond_final
-                mean_final = self.mean_final.to(self.device)
-                var_final = self.var_final.to(self.device)
 
                 x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y,
                                                                     mean_final=mean_final, var_final=var_final)
             else:
-                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y)
+                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y,
+                                                                   var_final=var_final)
 
         x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
 

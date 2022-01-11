@@ -129,7 +129,7 @@ def get_final_cond_model(args, init_ds):
         print("Final cond model std:", std)
         final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
 
-    return final_cond_model, std
+    return final_cond_model
 
 # Optimizer
 #--------------------------------------------------------------------------------

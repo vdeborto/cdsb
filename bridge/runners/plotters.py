@@ -540,7 +540,12 @@ class ImPlotter(Plotter):
                     for k in range(6):
                         subplot_imshow(uint8_batch_x[j, k].expand(3, -1, -1), plt_idx)
                         plt_idx += 1
-                    subplot_imshow(batch_x_mean[j], plt_idx)
+                    if batch_x_mean.shape[0] == 1:
+                        subplot_imshow(batch_x_mean[j], plt_idx)
+                    elif batch_x_mean.shape[0] == 3:
+                        subplot_imshow(uint8_batch_x_mean[j], plt_idx)
+                    else:
+                        raise ValueError
                     plt_idx += 1
                     subplot_imshow(batch_x_std[j], plt_idx)
                     plt_idx += 1

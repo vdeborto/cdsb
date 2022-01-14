@@ -91,15 +91,17 @@ def main(args):
 
         plt.clf()
         plt.plot(np.arange(T_spinup, T), rmses_enkf[T_spinup:], label=f'EnKF (RMSE {np.mean(rmses_enkf[T_spinup:])})')
+        plt.legend()
         plt.savefig("im/rmse_enkf.png")
 
         plt.clf()
         plt.plot(np.arange(T_spinup, T), filter_rmses_enkf[T_spinup:], label=f'EnKF (Filter RMSE {np.mean(filter_rmses_enkf[T_spinup:])})')
+        plt.legend()
         plt.savefig("im/filter_rmses_enkf.png")
-        plt.close()
 
         plt.clf()
         plt.plot(np.arange(T_spinup, T), filter_std_rmses_enkf[T_spinup:], label=f'EnKF (Filter std RMSE {np.mean(filter_std_rmses_enkf[T_spinup:])})')
+        plt.legend()
         plt.savefig("im/filter_std_rmses_enkf.png")
         plt.close()
 

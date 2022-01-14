@@ -25,20 +25,22 @@ class DimwiseBasisRegressor(nn.Module):
 
     def register_basis(self, X, i):
         if self.basis == 'rbf':
-            gamma = 2
-            self.basis_locs[i] = torch.quantile(X, torch.arange(1, self.deg)/self.deg, dim=0)
-            if self.deg == 2:
-                qq = torch.quantile(X, torch.tensor([0.25, 0.75]), dim=0)
-                self.basis_scales[i] = (qq[1:] - qq[:1]) / 2 * gamma
-            else:
-                self.basis_scales[i] = (self.basis_locs[i][torch.tensor([*range(1, self.deg), -1])] -
-                                        self.basis_locs[i][torch.tensor([0, *range(self.deg - 1)])]) / 2 * gamma
+            if self.deg >= 2:
+                gamma = 2
+                self.basis_locs[i] = torch.quantile(X, torch.arange(1, self.deg)/self.deg, dim=0)
+                if self.deg == 2:
+                    qq = torch.quantile(X, torch.tensor([0.25, 0.75]), dim=0)
+                    self.basis_scales[i] = (qq[1:] - qq[:1]) / 2 * gamma
+                else:
+                    self.basis_scales[i] = (self.basis_locs[i][torch.tensor([*range(1, self.deg - 1), -1])] -
+                                            self.basis_locs[i][torch.tensor([0, *range(self.deg - 2)])]) / 2 * gamma
 
     def compute_basis(self, X, i):
         if self.basis == 'rbf':
-            basis = torch.exp(-0.5 * ((X.unsqueeze(1) - self.basis_locs[i]) / self.basis_scales[i]) ** 2)
-            basis = basis.reshape(X.shape[0], -1)
-            X = torch.cat([X, basis], dim=-1)
+            if self.deg >= 2:
+                basis = torch.exp(-0.5 * ((X.unsqueeze(1) - self.basis_locs[i]) / self.basis_scales[i]) ** 2)
+                basis = basis.reshape(X.shape[0], -1)
+                X = torch.cat([X, basis], dim=-1)
 
         return X
 

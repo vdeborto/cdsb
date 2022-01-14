@@ -5,7 +5,7 @@ import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
 from .config_getters import get_models, get_optimizer, get_plotter, get_logger
-import datetime
+import hydra
 from tqdm import tqdm
 from .ema import EMAHelper
 from . import repeater
@@ -13,7 +13,6 @@ import time
 import random
 import torch.autograd.profiler as profiler
 from ..data import CacheLoader
-from torch.utils.data import TensorDataset
 from accelerate import Accelerator, DistributedType
 
 class IPFBase:
@@ -173,9 +172,9 @@ class IPFBase:
 
         if self.args.checkpoint_run:
             if "checkpoint_f" in self.args:
-                net_f.load_state_dict(torch.load(self.args.checkpoint_f))
+                net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f)))
             if "checkpoint_b" in self.args:
-                net_b.load_state_dict(torch.load(self.args.checkpoint_b))                
+                net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_b)))
 
         if forward_or_backward is None:
             net_f = net_f.to(self.device)
@@ -207,11 +206,11 @@ class IPFBase:
                 sample_net_f, sample_net_b = get_models(self.args)
                 
                 if "sample_checkpoint_f" in self.args:
-                    sample_net_f.load_state_dict(torch.load(self.args.sample_checkpoint_f))
+                    sample_net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_f)))
                     sample_net_f = sample_net_f.to(self.device)
                     self.ema_helpers['f'].register(sample_net_f)
                 if "sample_checkpoint_b" in self.args:
-                    sample_net_b.load_state_dict(torch.load(self.args.sample_checkpoint_b))
+                    sample_net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_b)))
                     sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
                                       

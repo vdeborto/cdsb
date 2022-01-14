@@ -84,7 +84,7 @@ class UNetModel(nn.Module):
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
             linear(model_channels, time_embed_dim),
-            nn.SiLU(),
+            nn.SiLU(inplace=True),
             linear(time_embed_dim, time_embed_dim),
         )
 
@@ -210,7 +210,7 @@ class UNetModel(nn.Module):
 
         self.out = nn.Sequential(
             normalization(ch),
-            nn.SiLU(),
+            nn.SiLU(inplace=True),
             zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
         )
 

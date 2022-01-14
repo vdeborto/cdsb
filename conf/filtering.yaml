@@ -5,7 +5,7 @@ defaults:
   - launcher: slurm_cpu
   - job
   - dataset: lorenz_63 #celeba, 2d, stackedmnist
-  - model: BasicCond #Basic, UNET
+  - model: BasisCond #BasicCond, BasisCond
   - override hydra/launcher: submitit_slurm
 
 name: ${Dataset}_${data.dataset}

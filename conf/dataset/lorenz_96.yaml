@@ -6,7 +6,7 @@ nosave: True
 x_dim: 5
 y_dim: 3
 
-ens_size: 1000
+ens_size: 200
 
 # conditioning
 data:
@@ -49,10 +49,10 @@ ema: False
 ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
-npar: 10000
+npar: ${ens_size}
 batch_size: 500
 num_iter: 5000
-cache_npar: 10000
+cache_npar: ${npar}
 n_ipf: 5
 lr: 0.0001
 

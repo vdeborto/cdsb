@@ -43,6 +43,7 @@ MODEL = 'Model'
 BASIC_MODEL_COND = 'BasicCond'
 SUPERRES_UNET_MODEL = 'SuperResUNET'
 POLY_MODEL_COND = 'PolyCond'
+BASIS_MODEL_COND = 'BasisCond'
 KRR_MODEL_COND = 'KRRCond'
 
 NAPPROX = 2000
@@ -99,21 +100,30 @@ def get_models(args):
 
         net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)
 
-    if model_tag == POLY_MODEL_COND:
-        x_dim = args.x_dim
-        y_dim = args.y_dim
-        x_deg = args.model.x_deg
-        y_deg = args.model.y_deg
-        net_f, net_b = DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise), \
-                       DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise)
+    # if model_tag == POLY_MODEL_COND:
+    #     x_dim = args.x_dim
+    #     y_dim = args.y_dim
+    #     x_deg = args.model.x_deg
+    #     y_deg = args.model.y_deg
+    #     net_f, net_b = DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise), \
+    #                    DimwisePolynomialRegressor(x_dim, y_dim, x_deg, y_deg, args.num_steps, x_dimwise=args.model.x_dimwise, y_dimwise=args.model.y_dimwise)
 
-    if model_tag == KRR_MODEL_COND:
+    if model_tag == BASIS_MODEL_COND:
         x_dim = args.x_dim
         y_dim = args.y_dim
-        kernel_fn = partial(MaternKernel, sigma=args.model.sigma, lam=args.model.lam,
-                            train_sigma=args.model.train_sigma, train_lam=args.model.train_lam)
-        net_f, net_b = KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr), \
-                       KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr)
+        deg = args.model.deg
+        basis = args.model.basis
+        num_steps = args.num_steps
+        net_f, net_b = DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, y_dimwise=args.model.y_dimwise), \
+                       DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, y_dimwise=args.model.y_dimwise)
+
+    # if model_tag == KRR_MODEL_COND:
+    #     x_dim = args.x_dim
+    #     y_dim = args.y_dim
+    #     kernel_fn = partial(MaternKernel, sigma=args.model.sigma, lam=args.model.lam,
+    #                         train_sigma=args.model.train_sigma, train_lam=args.model.train_lam)
+    #     net_f, net_b = KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr), \
+    #                    KernelRidgeRegressor(x_dim, y_dim, kernel_fn, args.num_steps, train_iter=args.num_iter, lr=args.lr)
 
     return net_f, net_b
 

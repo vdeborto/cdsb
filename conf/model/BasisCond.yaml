@@ -1,0 +1,8 @@
+# @package _global_
+
+# model
+Model: BasisCond
+model:
+    deg: 2
+    basis: rbf
+    y_dimwise: False

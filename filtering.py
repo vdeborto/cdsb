@@ -90,16 +90,16 @@ def main(args):
         plt.savefig("im/filter_mean_std_enkf.png")
 
         plt.clf()
-        plt.plot(np.arange(T_spinup, T), rmses_enkf[T_spinup:])
+        plt.plot(np.arange(T_spinup, T), rmses_enkf[T_spinup:], label=f'EnKF (RMSE {np.mean(rmses_enkf[T_spinup:])})')
         plt.savefig("im/rmse_enkf.png")
 
         plt.clf()
-        plt.plot(np.arange(T_spinup, T), filter_rmses_enkf[T_spinup:])
+        plt.plot(np.arange(T_spinup, T), filter_rmses_enkf[T_spinup:], label=f'EnKF (Filter RMSE {np.mean(filter_rmses_enkf[T_spinup:])})')
         plt.savefig("im/filter_rmses_enkf.png")
         plt.close()
 
         plt.clf()
-        plt.plot(np.arange(T_spinup, T), filter_std_rmses_enkf[T_spinup:])
+        plt.plot(np.arange(T_spinup, T), filter_std_rmses_enkf[T_spinup:], label=f'EnKF (Filter std RMSE {np.mean(filter_std_rmses_enkf[T_spinup:])})')
         plt.savefig("im/filter_std_rmses_enkf.png")
         plt.close()
 
@@ -151,7 +151,7 @@ def main(args):
                 print("Prior mean:", init_ds_repeat.tensors[0].mean(0).numpy())
                 print("Prior std:", init_ds_repeat.tensors[0].std(0).numpy())
 
-                if args.Model in ['PolyCond', 'KRRCond']:
+                if args.Model in ['PolyCond', 'BasisCond', 'KRRCond']:
                     ipf = IPFAnalytic(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)
                 else:
                     ipf = IPFSequential(init_ds_repeat, final_ds_repeat, mean_final, var_final, args, final_cond_model=EnKF)

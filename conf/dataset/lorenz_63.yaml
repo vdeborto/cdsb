@@ -57,9 +57,9 @@ n_ipf: 5
 lr: 0.0001
 
 # schedule
-num_steps: 50
+num_steps: 100
 gamma_max: 0.05
-gamma_min: 0.05
+gamma_min: 0.001
 gamma_space: linspace
 weight_distrib: False
 weight_distrib_alpha: 100

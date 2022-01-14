@@ -9,6 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 name: ${Dataset}_${data.dataset}
+run: 0
 nosave: False
 
 EnKF_run: False

@@ -31,6 +31,8 @@ class UNetModel(nn.Module):
         class-conditional with `num_classes` classes.
     :param use_checkpoint: use gradient checkpointing to reduce memory usage.
     :param num_heads: the number of attention heads in each attention layer.
+    :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
+    :param resblock_updown: use residual blocks for up/downsampling.
     """
 
     def __init__(
@@ -47,14 +49,11 @@ class UNetModel(nn.Module):
         num_classes=None,
         use_checkpoint=False,
         num_heads=1,
-        num_heads_upsample=-1,
         use_scale_shift_norm=False,
         resblock_updown=False,
     ):
         super().__init__()
 
-        if num_heads_upsample == -1:
-            num_heads_upsample = num_heads
         self.locals = [ in_channels,
                         model_channels,
                         out_channels,
@@ -67,7 +66,6 @@ class UNetModel(nn.Module):
                         num_classes,
                         use_checkpoint,
                         num_heads,
-                        num_heads_upsample,
                         use_scale_shift_norm,
                         resblock_updown
                     ]
@@ -82,7 +80,6 @@ class UNetModel(nn.Module):
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
         self.num_heads = num_heads
-        self.num_heads_upsample = num_heads_upsample
 
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
@@ -189,7 +186,7 @@ class UNetModel(nn.Module):
                         AttentionBlock(
                             ch,
                             use_checkpoint=use_checkpoint,
-                            num_heads=num_heads_upsample,
+                            num_heads=num_heads,
                         )
                     )
                 if level and i == num_res_blocks:

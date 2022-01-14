@@ -67,16 +67,19 @@ def get_models(args):
     if model_tag == SUPERRES_UNET_MODEL:
         image_size=args.data.image_size
 
-        if image_size == 256:
-            channel_mult = (1, 1, 2, 2, 4, 4)
-        elif image_size == 64:
-            channel_mult = (1, 2, 3, 4)
-        elif image_size == 32:
-            channel_mult = (1, 2, 2, 2)
-        elif image_size == 28:
-            channel_mult = (1, 2, 2)
+        if args.model.channel_mult is not None:
+            channel_mult = args.model.channel_mult
         else:
-            raise ValueError(f"unsupported image size: {image_size}")
+            if image_size == 256:
+                channel_mult = (1, 1, 2, 2, 4, 4)
+            elif image_size == 64:
+                channel_mult = (1, 2, 3, 4)
+            elif image_size == 32:
+                channel_mult = (1, 2, 2, 2)
+            elif image_size == 28:
+                channel_mult = (1, 2, 2)
+            else:
+                raise ValueError(f"unsupported image size: {image_size}")
 
         attention_ds = []
         for res in args.model.attention_resolutions.split(","):
@@ -94,8 +97,8 @@ def get_models(args):
                     "num_classes": None,
                     "use_checkpoint": args.model.use_checkpoint,
                     "num_heads": args.model.num_heads,
-                    "num_heads_upsample": args.model.num_heads_upsample,
-                    "use_scale_shift_norm": args.model.use_scale_shift_norm
+                    "use_scale_shift_norm": args.model.use_scale_shift_norm,
+                    "resblock_updown": args.model.resblock_updown
                 }
 
         net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)

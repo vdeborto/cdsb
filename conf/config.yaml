@@ -9,6 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 name: ${Dataset}_${data.dataset}
+run: 0
 nosave: False
 
 # logging
@@ -26,6 +27,8 @@ paths:
   experiments_dir_name: experiments
   data_dir_name: data
 
+var_final_gamma_scale: False
+double_gamma_scale: True
 langevin_scale: 2*torch.sqrt(gamma)
 
 # checkpoint

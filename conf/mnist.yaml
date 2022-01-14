@@ -34,7 +34,7 @@ langevin_scale: 2*torch.sqrt(gamma)
 checkpoint_run: False
 checkpoint_it: 1
 checkpoint_pass: b  # b or f (skip b ipf run)
-sample_checkpoint_f: ""
-sample_checkpoint_b: ""
-checkpoint_f: ""
-checkpoint_b: ""
+sample_checkpoint_f: null
+sample_checkpoint_b: null
+checkpoint_f: null
+checkpoint_b: null

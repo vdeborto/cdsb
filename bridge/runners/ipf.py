@@ -171,9 +171,9 @@ class IPFBase:
         net_f, net_b = get_models(self.args)
 
         if self.args.checkpoint_run:
-            if "checkpoint_f" in self.args:
+            if self.args.checkpoint_f is not None:
                 net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f)))
-            if "checkpoint_b" in self.args:
+            if self.args.checkpoint_b is not None:
                 net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_b)))
 
         if forward_or_backward is None:
@@ -205,11 +205,11 @@ class IPFBase:
                 # sample network
                 sample_net_f, sample_net_b = get_models(self.args)
                 
-                if "sample_checkpoint_f" in self.args:
+                if self.args.sample_checkpoint_f is not None:
                     sample_net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_f)))
                     sample_net_f = sample_net_f.to(self.device)
                     self.ema_helpers['f'].register(sample_net_f)
-                if "sample_checkpoint_b" in self.args:
+                if self.args.sample_checkpoint_b is not None:
                     sample_net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_b)))
                     sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
@@ -313,7 +313,7 @@ class IPFBase:
 
     def train(self):
         # INITIAL FORWARD PASS
-        if not self.args.nosave:
+        if not self.args.nosave and not self.args.checkpoint_run:
             with torch.no_grad():
                 self.set_seed(seed=0 + self.accelerator.process_index)
                 test_metrics = self.plotter(None, 0, 0, 'f')

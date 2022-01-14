@@ -17,7 +17,7 @@ cond_final: False
 cond_final_model:
   MODEL: BasicCond
   mean_scale: 1.
-  std_scale: 1.
+  std_scale: 1.  # if adaptive_std is True, std_scale scales the estimated cond std; else std_scale is set as the cond std
   adaptive_std: True
 
 

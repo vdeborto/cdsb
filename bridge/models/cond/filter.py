@@ -7,7 +7,7 @@ from utils import sample_cov, log_ess
 
 
 class EnsembleKalmanFilter(nn.Module):
-    def __init__(self, xdim, ydim, F_fn, G_fn, p_0_dist, ensemble_size):
+    def __init__(self, xdim, ydim, F_fn, G_fn, p_0_dist, ensemble_size, std_scale=1.):
         super().__init__()
         self.T = -1
 
@@ -20,6 +20,8 @@ class EnsembleKalmanFilter(nn.Module):
         self.p_0_dist = p_0_dist
         self.x_Tm1 = None
         self.x_T = None
+
+        self.std_scale = std_scale
 
     def advance_timestep(self, y_T):
         self.T += 1
@@ -56,7 +58,7 @@ class EnsembleKalmanFilter(nn.Module):
 
     def forward(self, y):
         x = self.x_T_pred.to(y.device) + (y.view(*y.shape[:-1], 1, self.ydim) - self.y_T_pred.to(y.device)) @ self.K.to(y.device).t()
-        return x.mean(-2), x.std(-2)
+        return x.mean(-2), x.std(-2) * self.std_scale
 
 
 class BootstrapParticleFilter(nn.Module):

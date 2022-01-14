@@ -115,7 +115,7 @@ def main(args):
         rmses_enkf = np.zeros([0])
         filter_rmses_enkf = np.zeros([0])
         filter_std_rmses_enkf = np.zeros([0])
-        EnKF = EnsembleKalmanFilter(xdim, ydim, F_fn, G_fn, p_0_dist, args.ens_size)
+        EnKF = EnsembleKalmanFilter(xdim, ydim, F_fn, G_fn, p_0_dist, args.ens_size, std_scale=args.cond_final_model.std_scale)
 
         for t in range(T):
             EnKF.advance_timestep(y[t])

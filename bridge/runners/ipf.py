@@ -21,8 +21,7 @@ class IPFBase:
                  valid_ds=None, test_ds=None):
         super().__init__()
         if accelerator is None:
-            self.accelerator = Accelerator(train_batch_size=args.batch_size, fp16=False, cpu=args.device == 'cpu',
-                                           split_batches=True)
+            self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu', split_batches=True)
         else:
             self.accelerator = accelerator
         self.device = self.accelerator.device  # local device for each process

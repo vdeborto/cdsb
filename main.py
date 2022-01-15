@@ -13,7 +13,7 @@ from bridge.runners.accelerator import Accelerator
 
 @hydra.main(config_path="./conf", config_name="config")
 def main(args):
-    accelerator = Accelerator(train_batch_size=args.batch_size, fp16=False, cpu=args.device == 'cpu', split_batches=True)
+    accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu', split_batches=True)
     accelerator.print('Directory: ' + os.getcwd())
 
     init_ds, final_ds, mean_final, var_final = get_datasets(args)

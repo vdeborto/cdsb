@@ -61,7 +61,7 @@ def get_models(args):
             "encoder_layers": args.model.encoder_layers,
             "temb_dim": args.model.temb_dim,
             "decoder_layers": args.model.decoder_layers,
-            "temb_denom": args.model.temb_denom
+            "temb_max_period": args.model.temb_max_period
         }
         net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs), \
                        ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
@@ -100,7 +100,8 @@ def get_models(args):
             "use_checkpoint": args.model.use_checkpoint,
             "num_heads": args.model.num_heads,
             "use_scale_shift_norm": args.model.use_scale_shift_norm,
-            "resblock_updown": args.model.resblock_updown
+            "resblock_updown": args.model.resblock_updown,
+            "temb_max_period": args.model.temb_max_period
         }
 
         net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)

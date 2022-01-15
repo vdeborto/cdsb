@@ -11,3 +11,4 @@ model:
     use_checkpoint: False
     use_scale_shift_norm: True
     resblock_updown: False
+    temb_max_period: 1000

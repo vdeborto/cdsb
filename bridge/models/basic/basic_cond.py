@@ -4,7 +4,7 @@ from .time_embedding import get_timestep_embedding
 
 class ScoreNetworkCond(torch.nn.Module):
 
-    def __init__(self, encoder_layers=[16], temb_dim=16, decoder_layers=[128,128], x_dim=1, y_dim=1, temb_denom=10000):
+    def __init__(self, encoder_layers=[16], temb_dim=16, decoder_layers=[128,128], x_dim=1, y_dim=1, temb_max_period=10000):
         super().__init__()
         self.temb_dim = temb_dim
         t_enc_dim = temb_dim * 2
@@ -25,7 +25,7 @@ class ScoreNetworkCond(torch.nn.Module):
                               activate_final = True,
                               activation_fn=torch.nn.LeakyReLU())
 
-        self.temb_denom = temb_denom
+        self.temb_max_period = temb_max_period
 
     def forward(self, x, y, t):
         if len(x.shape) == 1:
@@ -33,7 +33,7 @@ class ScoreNetworkCond(torch.nn.Module):
         if len(y.shape) == 1:
             y = y.unsqueeze(0)
 
-        t_emb = get_timestep_embedding(t, self.temb_dim, self.temb_denom)
+        t_emb = get_timestep_embedding(t, self.temb_dim, self.temb_max_period)
         t_emb = self.t_encoder(t_emb)
         xy_emb = self.xy_encoder(torch.cat([x, y], -1))
         h = torch.cat([xy_emb, t_emb], -1)

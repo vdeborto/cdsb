@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import math
 
 
-def get_timestep_embedding(timesteps, embedding_dim=128, denominator=10000):
+def get_timestep_embedding(timesteps, embedding_dim=128, max_period=10000):
     """
       From Fairseq.
       Build sinusoidal embeddings.
@@ -12,7 +12,7 @@ def get_timestep_embedding(timesteps, embedding_dim=128, denominator=10000):
       https://github.com/pytorch/fairseq/blob/master/fairseq/modules/sinusoidal_positional_embedding.py
     """
     half_dim = embedding_dim // 2
-    emb = math.log(denominator) / (half_dim - 1)
+    emb = math.log(max_period) / (half_dim - 1)
     emb = torch.exp(torch.arange(half_dim, device=timesteps.device) * -emb)
 
     emb = timesteps * emb.unsqueeze(0)

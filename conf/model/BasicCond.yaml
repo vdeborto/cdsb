@@ -6,4 +6,4 @@ model:
     encoder_layers: [16]
     temb_dim: 16
     decoder_layers: [128,128]
-    temb_denom: 10000
+    temb_max_period: 1000

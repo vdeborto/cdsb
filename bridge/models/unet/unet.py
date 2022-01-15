@@ -51,6 +51,7 @@ class UNetModel(nn.Module):
         num_heads=1,
         use_scale_shift_norm=False,
         resblock_updown=False,
+        temb_max_period=10000
     ):
         super().__init__()
 
@@ -67,7 +68,8 @@ class UNetModel(nn.Module):
                         use_checkpoint,
                         num_heads,
                         use_scale_shift_norm,
-                        resblock_updown
+                        resblock_updown,
+                        temb_max_period
                     ]
         self.in_channels = in_channels
         self.model_channels = model_channels
@@ -80,6 +82,7 @@ class UNetModel(nn.Module):
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
         self.num_heads = num_heads
+        self.temb_max_period = temb_max_period
 
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
@@ -247,7 +250,7 @@ class UNetModel(nn.Module):
         ), "must specify y if and only if the model is class-conditional"
 
         hs = []
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels, self.temb_max_period))
 
         if self.num_classes is not None:
             assert y.shape == (x.shape[0],)

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.linear_model import LinearRegression, RidgeCV
@@ -31,6 +32,8 @@ class DimwiseBasisRegressor(nn.Module):
                 if self.deg == 2:
                     qq = torch.quantile(X, torch.tensor([0.25, 0.75]), dim=0)
                     self.basis_scales[i] = (qq[1:] - qq[:1]) / 2 * gamma
+                elif self.deg == 3:
+                    self.basis_scales[i] = (self.basis_locs[i][np.ones(2)] - self.basis_locs[i][np.zeros(2)]) / 2 * gamma
                 else:
                     self.basis_scales[i] = (self.basis_locs[i][torch.tensor([*range(1, self.deg - 1), -1])] -
                                             self.basis_locs[i][torch.tensor([0, *range(self.deg - 2)])]) / 2 * gamma

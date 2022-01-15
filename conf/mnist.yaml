@@ -17,6 +17,7 @@ LOGGER: Wandb  # CSV, Wandb, NONE
 CSV_log_dir: ./
 
 # training
+optimizer: Adam
 cache_cpu: True
 cache_refresh_stride: 500
 test_batch_size: 200

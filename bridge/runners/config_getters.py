@@ -17,6 +17,7 @@ import os
 from functools import partial
 from .logger import CSVLogger, WandbLogger, Logger
 from torch.utils.data import DataLoader
+
 cmp = lambda x: transforms.Compose([*x])
 
 
@@ -37,7 +38,7 @@ def get_plotter(runner, args):
 
 
 # Model
-#--------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 
 MODEL = 'Model'
 BASIC_MODEL_COND = 'BasicCond'
@@ -57,15 +58,16 @@ def get_models(args):
         y_dim = args.y_dim
 
         kwargs = {
-                    "encoder_layers": args.model.encoder_layers,
-                    "temb_dim": args.model.temb_dim,
-                    "decoder_layers": args.model.decoder_layers,
-                    "temb_denom": args.model.temb_denom
-                }
-        net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs), ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
+            "encoder_layers": args.model.encoder_layers,
+            "temb_dim": args.model.temb_dim,
+            "decoder_layers": args.model.decoder_layers,
+            "temb_denom": args.model.temb_denom
+        }
+        net_f, net_b = ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs), \
+                       ScoreNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
 
     if model_tag == SUPERRES_UNET_MODEL:
-        image_size=args.data.image_size
+        image_size = args.data.image_size
 
         if args.model.channel_mult is not None:
             channel_mult = args.model.channel_mult
@@ -85,21 +87,21 @@ def get_models(args):
         for res in args.model.attention_resolutions.split(","):
             if image_size % int(res) == 0:
                 attention_ds.append(image_size // int(res))
-        
+
         kwargs = {
-                    "in_channels": args.data.channels,
-                    "model_channels": args.model.num_channels,
-                    "out_channels": args.data.channels,
-                    "num_res_blocks": args.model.num_res_blocks,
-                    "attention_resolutions": tuple(attention_ds),
-                    "dropout": args.model.dropout,
-                    "channel_mult": channel_mult,
-                    "num_classes": None,
-                    "use_checkpoint": args.model.use_checkpoint,
-                    "num_heads": args.model.num_heads,
-                    "use_scale_shift_norm": args.model.use_scale_shift_norm,
-                    "resblock_updown": args.model.resblock_updown
-                }
+            "in_channels": args.data.channels,
+            "model_channels": args.model.num_channels,
+            "out_channels": args.data.channels,
+            "num_res_blocks": args.model.num_res_blocks,
+            "attention_resolutions": tuple(attention_ds),
+            "dropout": args.model.dropout,
+            "channel_mult": channel_mult,
+            "num_classes": None,
+            "use_checkpoint": args.model.use_checkpoint,
+            "num_heads": args.model.num_heads,
+            "use_scale_shift_norm": args.model.use_scale_shift_norm,
+            "resblock_updown": args.model.resblock_updown
+        }
 
         net_f, net_b = SuperResModel(**kwargs), SuperResModel(**kwargs)
 
@@ -163,15 +165,22 @@ def get_final_cond_model(args, init_ds):
 
     return final_cond_model
 
-# Optimizer
-#--------------------------------------------------------------------------------
 
-def get_optimizer(net, lr):
-    return torch.optim.Adam(net.parameters(), lr=lr)
+# Optimizer
+# --------------------------------------------------------------------------------
+
+def get_optimizer(net, args):
+    lr = args.lr
+    optimizer = args.optimizer
+    if optimizer == 'Adam':
+        return torch.optim.Adam(net.parameters(), lr=lr)
+    elif optimizer == 'FusedAdam':
+        from bridge.runners.optimizer import FusedAdam
+        return FusedAdam(net.parameters(), lr=lr)
 
 
 # Dataset
-#--------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 
 DATASET = 'Dataset'
 DATASET_TRANSFER = 'Dataset_transfer'
@@ -198,9 +207,9 @@ def get_datasets(args):
         data_tag = args.data.dataset
         npar = args.npar
         init_ds = biochemical_ds(npar, data_tag)
-        
-    # 1D CONDITIONAL DATASET        
-    
+
+    # 1D CONDITIONAL DATASET
+
     if dataset_tag == DATASET_1D_COND:
         assert args.x_dim == 1
         assert args.y_dim == 1
@@ -220,7 +229,7 @@ def get_datasets(args):
         init_ds = one_dim_rev_cond_ds(root, npar, data_tag, args)
 
     # 5D CONDITIONAL DATASET
-    
+
     if dataset_tag == DATASET_5D_COND:
         assert args.x_dim == 1
         assert args.y_dim == 5
@@ -238,7 +247,6 @@ def get_datasets(args):
         if args.data.random_flip:
             train_transform.insert(2, transforms.RandomHorizontalFlip())
 
-
         data_tag = args.data.dataset
         root = data_dir
         init_ds = Cond_CelebA(data_tag, root, split='train', transform=cmp(train_transform), download=False)
@@ -253,14 +261,14 @@ def get_datasets(args):
 
     # EMNIST DATASET
 
-    if dataset_tag == DATASET_EMNIST:
-        root = os.path.join(data_dir, 'EMNIST')
-        saved_file = os.path.join(root, "data.pt")
-        load = os.path.exists(saved_file)
-        load = args.load
-        init_ds = EMNIST(root, load=load, source_root=root,
-                                train=True, num_channels = args.data.channels,
-                                imageSize=args.data.image_size)
+    # if dataset_tag == DATASET_EMNIST:
+    #     root = os.path.join(data_dir, 'EMNIST')
+    #     saved_file = os.path.join(root, "data.pt")
+    #     load = os.path.exists(saved_file)
+    #     load = args.load
+    #     init_ds = EMNIST(root, load=load, source_root=root,
+    #                      train=True, num_channels=args.data.channels,
+    #                      imageSize=args.data.image_size)
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
 
@@ -276,7 +284,6 @@ def get_final_dataset(args, init_ds):
         dataset_transfer_tag = None
 
     data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
-
 
     # if dataset_transfer_tag == DATASET_STACKEDMNIST:
     #     root = os.path.join(data_dir, 'mnist')
@@ -303,7 +310,6 @@ def get_final_dataset(args, init_ds):
     #                       device=args.device)
     #     mean_final = torch.tensor(0.)
     #     var_final = torch.tensor(1. * 10 ** 3)
-
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
     if not args.transfer:
@@ -430,7 +436,7 @@ def get_filtering_datasets(x_tm1, args):
 
 
 # Logger
-#--------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 
 LOGGER = 'LOGGER'
 LOGGER_PARAMS = 'LOGGER_PARAMS'
@@ -438,6 +444,7 @@ LOGGER_PARAMS = 'LOGGER_PARAMS'
 CSV_TAG = 'CSV'
 WANDB_TAG = 'Wandb'
 NOLOG_TAG = 'NONE'
+
 
 def get_logger(args, name):
     logger_tag = getattr(args, LOGGER)
@@ -448,7 +455,8 @@ def get_logger(args, name):
 
     if logger_tag == WANDB_TAG:
         log_dir = os.getcwd()
-        run_name = os.path.normpath(os.path.relpath(log_dir, hydra.utils.to_absolute_path(args.paths.experiments_dir_name))).replace("\\", "/")
+        run_name = os.path.normpath(
+            os.path.relpath(log_dir, hydra.utils.to_absolute_path(args.paths.experiments_dir_name))).replace("\\", "/")
         data_tag = args.data.dataset
         config = OmegaConf.to_container(args, resolve=True)
 

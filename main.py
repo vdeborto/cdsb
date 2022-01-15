@@ -6,17 +6,16 @@ sys.path.append('..')
 
 from bridge.runners.ipf import IPFSequential, IPFAnalytic
 from bridge.runners.config_getters import get_datasets, get_valid_test_datasets, get_final_cond_model
-
-from accelerate import Accelerator
+from bridge.runners.accelerator import Accelerator
 
 
 # SETTING PARAMETERS
 
 @hydra.main(config_path="./conf", config_name="config")
 def main(args):
-    accelerator = Accelerator(fp16=False, cpu=args.device == 'cpu', split_batches=True)
+    accelerator = Accelerator(train_batch_size=args.batch_size, fp16=False, cpu=args.device == 'cpu', split_batches=True)
     accelerator.print('Directory: ' + os.getcwd())
-    
+
     init_ds, final_ds, mean_final, var_final = get_datasets(args)
     valid_ds, test_ds = get_valid_test_datasets(args)
 
@@ -33,7 +32,37 @@ def main(args):
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
     ipf.train()
-    
+
+
+def hydra_argv_remapper(argv_map):
+    """
+    Call this function before main
+
+    argv_map is a dict that remaps specific args to something else that hydra will gracefully not choke on
+
+        ex: {'--foo':'standard.hydra.override.foo', '--bar':'example.bar'}
+    """
+
+    argv = []
+    for v in sys.argv:
+        if v[:2] == '--':
+            argv = argv + v.split('=')
+        else:
+            argv.append(v)
+
+    # Remap the args
+    for k, v in argv_map.items():
+        if k in argv:
+            i = argv.index(k)
+            if v is not None:
+                new_arg = f"{v}={argv[i + 1]}"
+                argv.append(new_arg)
+            del argv[i:i + 2]
+
+    # Replace sys.argv with our remapped argv
+    sys.argv = argv
+
 
 if __name__ == '__main__':
+    hydra_argv_remapper({'--local_rank': None})
     main()  

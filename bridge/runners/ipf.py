@@ -13,14 +13,16 @@ import time
 import random
 import torch.autograd.profiler as profiler
 from ..data import CacheLoader
-from accelerate import Accelerator, DistributedType
+from bridge.runners.accelerator import Accelerator
+
 
 class IPFBase:
     def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None,
                  valid_ds=None, test_ds=None):
         super().__init__()
         if accelerator is None:
-            self.accelerator = Accelerator(fp16=False, cpu=args.device == 'cpu', split_batches=True)
+            self.accelerator = Accelerator(train_batch_size=args.batch_size, fp16=False, cpu=args.device == 'cpu',
+                                           split_batches=True)
         else:
             self.accelerator = accelerator
         self.device = self.accelerator.device  # local device for each process
@@ -45,12 +47,10 @@ class IPFBase:
         self.num_iter = self.args.num_iter
         self.grad_clipping = self.args.grad_clipping
         self.fast_sampling = self.args.fast_sampling
-        self.lr = self.args.lr
 
-        
-        n = self.num_steps//2
+        n = self.num_steps // 2
         if self.args.gamma_space == 'linspace':
-            gamma_half = np.linspace(self.args.gamma_min,args.gamma_max, n)
+            gamma_half = np.linspace(self.args.gamma_min, args.gamma_max, n)
         elif self.args.gamma_space == 'geomspace':
             gamma_half = np.geomspace(self.args.gamma_min, self.args.gamma_max, n)
         self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
@@ -81,15 +81,23 @@ class IPFBase:
         self.build_dataloaders()
 
         self.npar = len(init_ds)
-        cache_epochs = (self.batch_size*self.args.cache_refresh_stride)/(self.cache_npar*self.args.num_cache_batches*self.num_steps)
-        data_epochs = (self.num_iter*self.cache_npar*self.args.num_cache_batches)/(self.npar*self.args.cache_refresh_stride)
+        cache_epochs = (self.batch_size * self.args.cache_refresh_stride) / (
+                    self.cache_npar * self.args.num_cache_batches * self.num_steps)
+        data_epochs = (self.num_iter * self.cache_npar * self.args.num_cache_batches) / (
+                    self.npar * self.args.cache_refresh_stride)
         self.accelerator.print("Cache epochs:", cache_epochs)
         self.accelerator.print("Data epochs:", data_epochs)
         if self.accelerator.is_main_process:
             if cache_epochs < 1:
-                warnings.warn("Cache epochs < 1, increase batch_size, cache_refresh_stride, or decrease cache_npar, num_cache_batches, num_steps. ")
+                warnings.warn(
+                    "Cache epochs < 1, increase batch_size, cache_refresh_stride, or decrease cache_npar, num_cache_batches, num_steps. ")
             if data_epochs < 1:
-                warnings.warn("Data epochs < 1, increase num_iter, cache_npar, num_cache_batches, or decrease npar, cache_refresh_stride. ")
+                warnings.warn(
+                    "Data epochs < 1, increase num_iter, cache_npar, num_cache_batches, or decrease npar, cache_refresh_stride. ")
+
+            if self.args.LOGGER == 'Wandb':
+                import wandb
+                wandb.log({"cache_epochs": cache_epochs, "data_epochs": data_epochs}, step=0)
 
         # # checkpoint
         # date = str(datetime.datetime.now())[0:10]
@@ -122,7 +130,6 @@ class IPFBase:
 
             self.ckpt_dir = os.path.join(ckpt_dir, f"version_{version}")
             os.makedirs(self.ckpt_dir, exist_ok=True)
-
 
         self.stride = self.args.gif_stride
         self.stride_log = self.args.log_stride
@@ -188,12 +195,13 @@ class IPFBase:
             self.net.update({'b': net_b})
 
     def accelerate(self, forward_or_backward):
-        (self.net[forward_or_backward], self.optimizer[forward_or_backward]) = self.accelerator.prepare(self.net[forward_or_backward], self.optimizer[forward_or_backward])
+        (self.net[forward_or_backward], self.optimizer[forward_or_backward]) = self.accelerator.prepare(
+            self.net[forward_or_backward], self.optimizer[forward_or_backward])
 
     def update_ema(self, forward_or_backward):
         if self.args.ema:
             self.ema_helpers[forward_or_backward] = EMAHelper(mu=self.args.ema_rate, device=self.device)
-            self.ema_helpers[forward_or_backward].register(self.net[forward_or_backward])
+            self.ema_helpers[forward_or_backward].register(self.accelerator.unwrap_model(self.net[forward_or_backward]))
 
     def build_ema(self):
         if self.args.ema:
@@ -204,26 +212,28 @@ class IPFBase:
             if self.args.checkpoint_run:
                 # sample network
                 sample_net_f, sample_net_b = get_models(self.args)
-                
+
                 if self.args.sample_checkpoint_f is not None:
-                    sample_net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_f)))
+                    sample_net_f.load_state_dict(
+                        torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_f)))
                     sample_net_f = sample_net_f.to(self.device)
                     self.ema_helpers['f'].register(sample_net_f)
                 if self.args.sample_checkpoint_b is not None:
-                    sample_net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_b)))
+                    sample_net_b.load_state_dict(
+                        torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_b)))
                     sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
-                                      
+
     def build_optimizer(self, forward_or_backward):
-        optimizer = get_optimizer(self.net[forward_or_backward], self.lr)
+        optimizer = get_optimizer(self.net[forward_or_backward], self.args)
         self.optimizer = {forward_or_backward: optimizer}
 
     def build_dataloaders(self):
         def worker_init_fn(worker_id):
             np.random.seed(np.random.get_state()[1][0] + worker_id + self.accelerator.process_index)
 
-        self.kwargs = {"num_workers": self.args.num_workers, 
-                       "pin_memory": self.args.pin_memory, 
+        self.kwargs = {"num_workers": self.args.num_workers,
+                       "pin_memory": self.args.pin_memory,
                        "worker_init_fn": worker_init_fn,
                        'drop_last': True}
 
@@ -272,15 +282,19 @@ class IPFBase:
         self.langevin = Langevin(self.num_steps, shape_x, shape_y, self.gammas, self.time_sampler,
                                  mean_final=self.mean_final, var_final=self.var_final,
                                  mean_match=self.args.mean_match, out_scale=self.args.langevin_scale,
-                                 var_final_gamma_scale=self.args.var_final_gamma_scale, double_gamma_scale=self.args.double_gamma_scale)
+                                 var_final_gamma_scale=self.args.var_final_gamma_scale,
+                                 double_gamma_scale=self.args.double_gamma_scale)
 
-    def new_cacheloader(self, forward_or_backward, n, use_ema=True):
-        sample_direction = 'f' if forward_or_backward == 'b' else 'b'
-        if use_ema:
-            sample_net = self.ema_helpers[sample_direction].ema_copy(self.net[sample_direction])
+    def get_sample_net(self, fb):
+        if self.args.ema:
+            sample_net = self.ema_helpers[fb].ema_copy(self.accelerator.unwrap_model(self.net[fb]))
         else:
-            sample_net = self.net[sample_direction]
+            sample_net = self.net[fb]
+        return sample_net
 
+    def new_cacheloader(self, forward_or_backward, n):
+        sample_direction = 'f' if forward_or_backward == 'b' else 'b'
+        sample_net = self.get_sample_net(sample_direction)
         sample_net = sample_net.to(self.device)
         sample_net.eval()
 
@@ -385,11 +399,7 @@ class IPFBase:
 
     def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None, var_final=None):
         if sample_net is None:
-            if self.args.ema:
-                sample_net = self.ema_helpers['b'].ema_copy(self.net['b'])
-            else:
-                sample_net = self.net['b']
-
+            sample_net = self.get_sample_net('b')
             sample_net = sample_net.to(self.device)
         sample_net.eval()
 
@@ -397,7 +407,8 @@ class IPFBase:
             # self.set_seed(seed=0 + self.accelerator.process_index)
             final_batch_x = final_batch_x.to(self.device)
             y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
-            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True, var_final=var_final)
+            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True,
+                                                                 var_final=var_final)
 
             x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
 
@@ -405,11 +416,7 @@ class IPFBase:
 
     def forward_sample(self, init_batch_x, init_batch_y, n, fb, fix_seed=False, sample_net=None):
         if sample_net is None:
-            if self.args.ema:
-                sample_net = self.ema_helpers['f'].ema_copy(self.net['f'])
-            else:
-                sample_net = self.net['f']
-
+            sample_net = self.get_sample_net('f')
             sample_net = sample_net.to(self.device)
         sample_net.eval()
 
@@ -456,10 +463,7 @@ class IPFBase:
 class IPFSequential(IPFBase):
     def save_step(self, i, n, fb):
         if i == 1 or i % self.stride == 0 or i == self.num_iter:
-            if self.args.ema:
-                sample_net = self.ema_helpers[fb].ema_copy(self.net[fb])
-            else:
-                sample_net = self.net[fb]
+            sample_net = self.get_sample_net(fb)
 
             if self.accelerator.is_main_process:
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
@@ -486,22 +490,22 @@ class IPFSequential(IPFBase):
                     test_metrics = self.plotter(sample_net, i, n, fb)
 
                     if self.accelerator.is_main_process:
-                        self.save_logger.log_metrics(test_metrics, step=i+self.num_iter*(n-1))
+                        self.save_logger.log_metrics(test_metrics, step=i + self.num_iter * (n - 1))
 
     def ipf_step(self, forward_or_backward, n):
-        new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
-        
+        new_dl = self.new_cacheloader(forward_or_backward, n)
+
         if not self.args.use_prev_net:
             self.build_models(forward_or_backward)
             self.update_ema(forward_or_backward)
 
         self.build_optimizer(forward_or_backward)
         self.accelerate(forward_or_backward)
-        
-        for i in tqdm(range(1, self.num_iter+1)):
+
+        for i in tqdm(range(1, self.num_iter + 1)):
             self.net[forward_or_backward].train()
 
-            self.set_seed(seed=n*self.num_iter+i)
+            self.set_seed(seed=n * self.num_iter + i)
 
             x, y, out, steps_expanded = next(new_dl)
             # x = x.to(self.device)
@@ -513,12 +517,11 @@ class IPFSequential(IPFBase):
             if self.args.mean_match:
                 pred = self.net[forward_or_backward](x, y, eval_steps) - x
             else:
-                pred = self.net[forward_or_backward](x, y, eval_steps) 
+                pred = self.net[forward_or_backward](x, y, eval_steps)
 
             loss = F.mse_loss(pred, out)
 
             self.accelerator.backward(loss)
-                
 
             if self.grad_clipping:
                 clipping_param = self.args.grad_clip
@@ -526,26 +529,24 @@ class IPFSequential(IPFBase):
             else:
                 total_norm = 0.
 
-
             if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
                 self.logger.log_metrics({'fb': forward_or_backward,
                                          'ipf': n,
                                          'loss': loss,
-                                         'grad_norm': total_norm}, step=i+self.num_iter*(n-1))
-            
+                                         'grad_norm': total_norm}, step=i + self.num_iter * (n - 1))
+
             self.optimizer[forward_or_backward].step()
-            self.optimizer[forward_or_backward].zero_grad()
+            self.optimizer[forward_or_backward].zero_grad(set_to_none=True)
             if self.args.ema:
-                self.ema_helpers[forward_or_backward].update(self.net[forward_or_backward])
-            
+                self.ema_helpers[forward_or_backward].update(self.accelerator.unwrap_model(self.net[forward_or_backward]))
 
             self.save_step(i, n, forward_or_backward)
-            
+
             if (i % self.args.cache_refresh_stride == 0) and (i != self.num_iter):
                 new_dl = None
                 torch.cuda.empty_cache()
-                new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
-        
+                new_dl = self.new_cacheloader(forward_or_backward, n)
+
         new_dl = None
 
         self.net[forward_or_backward] = self.accelerator.unwrap_model(self.net[forward_or_backward])
@@ -553,12 +554,9 @@ class IPFSequential(IPFBase):
 
 
 class IPFAnalytic(IPFBase):
-    def new_cacheloader(self, forward_or_backward, n, use_ema=True):
+    def new_cacheloader(self, forward_or_backward, n):
         sample_direction = 'f' if forward_or_backward == 'b' else 'b'
-        if use_ema:
-            sample_net = self.ema_helpers[sample_direction].ema_copy(self.net[sample_direction])
-        else:
-            sample_net = self.net[sample_direction]
+        sample_net = self.net[sample_direction]
 
         sample_net = sample_net.to(self.device)
         sample_net.eval()
@@ -584,7 +582,7 @@ class IPFAnalytic(IPFBase):
         return new_ds
 
     def ipf_step(self, forward_or_backward, n):
-        new_dl = self.new_cacheloader(forward_or_backward, n, self.args.ema)
+        new_dl = self.new_cacheloader(forward_or_backward, n)
 
         if not self.args.use_prev_net:
             self.build_models(forward_or_backward)

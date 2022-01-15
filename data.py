@@ -41,13 +41,13 @@ def main():
         except:
             import zipfile
             from torchvision.datasets.utils import download_file_from_google_drive
-            import shutils
+            import shutil
 
             root = args.data_dir
             data_dir = os.path.join(root, "celeba")
 
             if os.path.exists(data_dir):
-                shutils.rmtree(data_dir)
+                shutil.rmtree(data_dir)
 
             if not os.path.exists(data_dir):
                 os.mkdir(data_dir)

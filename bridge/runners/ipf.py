@@ -81,23 +81,19 @@ class IPFBase:
         self.build_dataloaders()
 
         self.npar = len(init_ds)
-        cache_epochs = (self.batch_size * self.args.cache_refresh_stride) / (
-                    self.cache_npar * self.args.num_cache_batches * self.num_steps)
-        data_epochs = (self.num_iter * self.cache_npar * self.args.num_cache_batches) / (
-                    self.npar * self.args.cache_refresh_stride)
-        self.accelerator.print("Cache epochs:", cache_epochs)
-        self.accelerator.print("Data epochs:", data_epochs)
+        self.cache_epochs = (self.batch_size * self.args.cache_refresh_stride) / (
+                        self.cache_npar * self.args.num_cache_batches * self.num_steps)
+        self.data_epochs = (self.num_iter * self.cache_npar * self.args.num_cache_batches) / (
+                        self.npar * self.args.cache_refresh_stride)
+        self.accelerator.print("Cache epochs:", self.cache_epochs)
+        self.accelerator.print("Data epochs:", self.data_epochs)
         if self.accelerator.is_main_process:
-            if cache_epochs < 1:
+            if self.cache_epochs < 1:
                 warnings.warn(
                     "Cache epochs < 1, increase batch_size, cache_refresh_stride, or decrease cache_npar, num_cache_batches, num_steps. ")
-            if data_epochs < 1:
+            if self.data_epochs < 1:
                 warnings.warn(
                     "Data epochs < 1, increase num_iter, cache_npar, num_cache_batches, or decrease npar, cache_refresh_stride. ")
-
-            if self.args.LOGGER == 'Wandb':
-                import wandb
-                wandb.log({"cache_epochs": cache_epochs, "data_epochs": data_epochs}, step=0)
 
         # # checkpoint
         # date = str(datetime.datetime.now())[0:10]
@@ -533,7 +529,9 @@ class IPFSequential(IPFBase):
                 self.logger.log_metrics({'fb': forward_or_backward,
                                          'ipf': n,
                                          'loss': loss,
-                                         'grad_norm': total_norm}, step=i + self.num_iter * (n - 1))
+                                         'grad_norm': total_norm,
+                                         "cache_epochs": self.cache_epochs,
+                                         "data_epochs": self.data_epochs}, step=i + self.num_iter * (n - 1))
 
             self.optimizer[forward_or_backward].step()
             self.optimizer[forward_or_backward].zero_grad(set_to_none=True)

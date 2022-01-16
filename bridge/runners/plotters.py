@@ -610,7 +610,7 @@ class ImPlotter(Plotter):
                     file_idx = iters * self.ipf.test_batch_size + self.ipf.accelerator.process_index * self.ipf.test_batch_size // self.ipf.accelerator.num_processes + k
                     filename_png = os.path.join(im_dir, '{:05}.png'.format(file_idx))
                     assert not os.path.isfile(filename_png)
-                    save_image(x_last, filename_png)
+                    save_image(x_last[k], filename_png)
 
 
 class OneDCondPlotter(Plotter):

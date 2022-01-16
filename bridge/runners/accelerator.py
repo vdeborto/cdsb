@@ -76,3 +76,19 @@ class Accelerator(_Accelerator):
             ), "You can't use same `Accelerator()` instance with 2 models when using DeepSpeed"
 
         return tuple(result)
+
+    def clip_grad_norm_(self, parameters, max_norm, norm_type=2):
+        """
+        Should be used in place of :func:`torch.nn.utils.clip_grad_norm_`.
+        """
+        self.unscale_gradients()
+        total_norm = torch.nn.utils.clip_grad_norm_(parameters, max_norm, norm_type=norm_type)
+        return total_norm
+
+    def clip_grad_value_(self, parameters, clip_value):
+        """
+        Should be used in place of :func:`torch.nn.utils.clip_grad_value_`.
+        """
+        self.unscale_gradients()
+        total_norm = torch.nn.utils.clip_grad_value_(parameters, clip_value)
+        return total_norm

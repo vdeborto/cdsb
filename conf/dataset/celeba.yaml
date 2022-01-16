@@ -55,7 +55,7 @@ pin_memory: True
 # logging
 log_stride: 10
 gif_stride: 5000
-plot_npar: 10000
+plot_npar: 1000
 test_npar: 100
 
 # training
@@ -69,7 +69,7 @@ grad_clipping: True
 grad_clip: 1.0
 batch_size: 128
 num_iter: 50000
-n_ipf: 20
+n_ipf: 25
 lr: 0.0001
 
 # diffusion schedule

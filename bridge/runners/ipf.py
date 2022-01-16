@@ -520,7 +520,7 @@ class IPFSequential(IPFBase):
 
             if self.grad_clipping:
                 clipping_param = self.args.grad_clip
-                total_norm = torch.nn.utils.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
+                total_norm = self.accelerator.clip_grad_norm_(self.net[forward_or_backward].parameters(), clipping_param)
             else:
                 total_norm = 0.
 

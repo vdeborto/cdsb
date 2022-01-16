@@ -164,7 +164,7 @@ class Plotter(object):
         metric_results = {}
 
         iters = 0
-        while iters * self.ipf.test_batch_size < self.ipf.save_npar:
+        while iters * self.ipf.test_batch_size < (self.ipf.save_npar if fb == 'b' else self.ipf.args.test_npar):
             try:
                 start = time.time()
 
@@ -182,24 +182,24 @@ class Plotter(object):
                 x_last = x_tot[:, -1]
                 self.plot_and_record_batch_joint(x_last, init_batch_x, iters, i, n, fb, dl_name=dl_name)
 
-                gather_batch_x = self.ipf.accelerator.gather(batch_x)
-                gather_batch_y = self.ipf.accelerator.gather(batch_y)
-                gather_x_tot = self.ipf.accelerator.gather(x_tot)
-                gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
+                if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
+                    gather_batch_x = self.ipf.accelerator.gather(batch_x)
+                    gather_batch_y = self.ipf.accelerator.gather(batch_y)
+                    gather_x_tot = self.ipf.accelerator.gather(x_tot)
+                    gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
 
-                if self.args.cond_final:
-                    gather_mean_final = self.ipf.accelerator.gather(mean_final)
-                    gather_var_final = self.ipf.accelerator.gather(var_final)
+                    if self.args.cond_final:
+                        gather_mean_final = self.ipf.accelerator.gather(mean_final)
+                        gather_var_final = self.ipf.accelerator.gather(var_final)
 
-                if self.ipf.accelerator.is_main_process:
-                    if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
-                        all_batch_x.append(gather_batch_x.cpu())
-                        all_batch_y.append(gather_batch_y.cpu())
-                        all_x_tot.append(gather_x_tot.cpu())
-                        all_init_batch_x.append(gather_init_batch_x.cpu())
-                        if self.args.cond_final:
-                            all_mean_final.append(gather_mean_final.cpu())
-                            all_var_final.append(gather_var_final.cpu())
+                    if self.ipf.accelerator.is_main_process:
+                            all_batch_x.append(gather_batch_x.cpu())
+                            all_batch_y.append(gather_batch_y.cpu())
+                            all_x_tot.append(gather_x_tot.cpu())
+                            all_init_batch_x.append(gather_init_batch_x.cpu())
+                            if self.args.cond_final:
+                                all_mean_final.append(gather_mean_final.cpu())
+                                all_var_final.append(gather_var_final.cpu())
 
                 iters = iters + 1
 

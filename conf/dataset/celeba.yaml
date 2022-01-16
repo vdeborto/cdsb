@@ -55,12 +55,13 @@ pin_memory: True
 # logging
 log_stride: 10
 gif_stride: 5000
-plot_npar: 100
+plot_npar: 10000
 test_npar: 100
 
 # training
-cache_npar: 300
-num_cache_batches: 10
+cache_refresh_stride: 2000
+cache_npar: 250
+num_cache_batches: 20
 use_prev_net: True
 ema: True
 ema_rate: 0.999

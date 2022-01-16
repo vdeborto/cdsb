@@ -311,7 +311,7 @@ class IPFBase:
                                  self.langevin, self, n,
                                  device='cpu' if self.args.cache_cpu else self.device)
 
-        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True, pin_memory=True)
 
         new_dl = self.accelerator.prepare(new_dl)
         new_dl = repeater(new_dl)
@@ -500,7 +500,7 @@ class IPFSequential(IPFBase):
         for i in tqdm(range(1, self.num_iter + 1)):
             self.net[forward_or_backward].train()
 
-            self.set_seed(seed=n * self.num_iter + i)
+            self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)
 
             x, y, out, steps_expanded = next(new_dl)
             # x = x.to(self.device)

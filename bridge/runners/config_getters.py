@@ -456,12 +456,12 @@ def get_logger(args, name):
 
     if logger_tag == WANDB_TAG:
         log_dir = os.getcwd()
-        run_name = os.path.normpath(
-            os.path.relpath(log_dir, hydra.utils.to_absolute_path(args.paths.experiments_dir_name))).replace("\\", "/")
+        run_name = os.path.normpath(os.path.relpath(log_dir, os.path.join(
+            hydra.utils.to_absolute_path(args.paths.experiments_dir_name), args.name))).replace("\\", "/")
         data_tag = args.data.dataset
         config = OmegaConf.to_container(args, resolve=True)
 
-        kwargs = {'name': run_name, 'project': 'cdsb_develop_' + args.Dataset, 'prefix': name, 'entity': "yuyshi-team",
+        kwargs = {'name': run_name, 'project': 'cdsb_develop_' + args.name, 'prefix': name, 'entity': "yuyshi-team",
                   'tags': [data_tag], 'config': config}
         return WandbLogger(**kwargs)
 

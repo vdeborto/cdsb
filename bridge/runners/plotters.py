@@ -11,7 +11,7 @@ from . import repeater
 from ..data.utils import save_image, to_uint8_tensor, normalize_tensor
 from ..data.metrics import PSNR, SSIM, FID
 from PIL import Image
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
 
 
@@ -179,13 +179,8 @@ class Plotter(object):
                 stop = time.time()
                 times.append(stop - start)
 
-                if fb == 'b':
-                    x_last = x_tot[:, -1]
-                    uint8_x_init = to_uint8_tensor(init_batch_x)
-                    uint8_x_last = to_uint8_tensor(x_last)
-
-                    for metric in self.metrics_dict.values():
-                        metric.update(uint8_x_last, uint8_x_init)
+                x_last = x_tot[:, -1]
+                self.plot_and_record_batch_joint(x_last, init_batch_x, iters, i, n, fb, dl_name=dl_name)
 
                 gather_batch_x = self.ipf.accelerator.gather(batch_x)
                 gather_batch_y = self.ipf.accelerator.gather(batch_y)
@@ -197,13 +192,14 @@ class Plotter(object):
                     gather_var_final = self.ipf.accelerator.gather(var_final)
 
                 if self.ipf.accelerator.is_main_process:
-                    all_batch_x.append(gather_batch_x.cpu())
-                    all_batch_y.append(gather_batch_y.cpu())
-                    all_x_tot.append(gather_x_tot.cpu())
-                    all_init_batch_x.append(gather_init_batch_x.cpu())
-                    if self.args.cond_final:
-                        all_mean_final.append(gather_mean_final.cpu())
-                        all_var_final.append(gather_var_final.cpu())
+                    if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
+                        all_batch_x.append(gather_batch_x.cpu())
+                        all_batch_y.append(gather_batch_y.cpu())
+                        all_x_tot.append(gather_x_tot.cpu())
+                        all_init_batch_x.append(gather_init_batch_x.cpu())
+                        if self.args.cond_final:
+                            all_mean_final.append(gather_mean_final.cpu())
+                            all_var_final.append(gather_var_final.cpu())
 
                 iters = iters + 1
 
@@ -261,7 +257,6 @@ class Plotter(object):
             elif fb == 'b':
                 x_tot_fwd, x_tot_fwdbwd_c = self.ipf.forward_backward_sample(init_batch_x, init_batch_y, y_c, n, fb,
                                                                              return_fwd_tot=True, sample_net_b=sample_net)
-
 
             gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x).cpu()
             gather_init_batch_y = self.ipf.accelerator.gather(init_batch_y).cpu()
@@ -404,6 +399,9 @@ class Plotter(object):
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
         return {}
 
+    def plot_and_record_batch_joint(self, x_last, x_init, iters, i, n, fb, dl_name='train'):
+        pass
+
 
 class ImPlotter(Plotter):
 
@@ -483,16 +481,6 @@ class ImPlotter(Plotter):
                         save_image_with_metrics(x_start_tot_grid[k], filename_grid_png, nrow=10)
 
                 make_gif(plot_paths, output_directory=gif_dir, gif_name=name+'_im_grid')
-
-            if self.plot_level >= 3:
-                if fb == 'b':
-                    im_dir = os.path.join(im_dir, "im/")
-                    os.makedirs(im_dir, exist_ok=True)
-
-                    for k in range(x_tot.shape[1]):
-                        plt.clf()
-                        filename_png = os.path.join(im_dir, '{:05}.png'.format(k))
-                        save_image(x_tot[-1, k], filename_png)
 
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
@@ -602,6 +590,27 @@ class ImPlotter(Plotter):
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
+
+    def plot_and_record_batch_joint(self, x_last, x_init, iters, i, n, fb, dl_name='train'):
+        if fb == 'b':
+            uint8_x_init = to_uint8_tensor(x_init)
+            uint8_x_last = to_uint8_tensor(x_last)
+
+            for metric in self.metrics_dict.values():
+                metric.update(uint8_x_last, uint8_x_init)
+
+            if self.plot_level >= 3:
+                name = str(i) + '_' + fb + '_' + str(n)
+                im_dir = os.path.join(self.im_dir, name, dl_name)
+                im_dir = os.path.join(im_dir, "im/")
+                os.makedirs(im_dir, exist_ok=True)
+
+                for k in range(x_last.shape[0]):
+                    plt.clf()
+                    file_idx = iters * self.ipf.test_batch_size + self.ipf.accelerator.process_index * self.ipf.test_batch_size // self.ipf.accelerator.num_processes + k
+                    filename_png = os.path.join(im_dir, '{:05}.png'.format(file_idx))
+                    assert not os.path.isfile(filename_png)
+                    save_image(x_last, filename_png)
 
 
 class OneDCondPlotter(Plotter):

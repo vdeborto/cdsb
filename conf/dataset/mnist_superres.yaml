@@ -39,6 +39,7 @@ plot_npar: 10000
 test_npar: 10000
 
 # training
+cache_refresh_stride: 2000
 cache_npar: 2000
 num_cache_batches: 1
 use_prev_net: False

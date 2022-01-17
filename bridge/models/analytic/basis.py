@@ -5,14 +5,14 @@ from sklearn.linear_model import LinearRegression, RidgeCV
 
 
 class DimwiseBasisRegressor(nn.Module):
-    def __init__(self, x_dim, y_dim, deg, basis, num_steps, y_dimwise=False):
+    def __init__(self, x_dim, y_dim, deg, basis, num_steps, y_dimwise=False, alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]):
         super().__init__()
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.num_steps = num_steps
         self.deg = deg
         # self.models = [LinearRegression() for _ in range(self.num_steps*self.x_dim)]
-        self.models = [RidgeCV(alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]) for _ in range(self.num_steps*self.x_dim)]
+        self.models = [RidgeCV(alphas=alphas) for _ in range(self.num_steps*self.x_dim)]
 
         self.basis = basis
         self.y_dimwise = y_dimwise

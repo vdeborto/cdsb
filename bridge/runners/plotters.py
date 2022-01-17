@@ -42,18 +42,24 @@ class Plotter(object):
             os.makedirs(im_dir, exist_ok=True)
             os.makedirs(gif_dir, exist_ok=True)
 
-            existing_versions = []
-            for d in os.listdir(im_dir):
-                if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
-                    existing_versions.append(int(d.split("_")[1]))
+        while not os.path.isdir(im_dir):
+            time.sleep(3)
+        ipf.accelerator.wait_for_everyone()
 
-            if len(existing_versions) == 0:
-                version = 0
-            else:
-                version = max(existing_versions) + 1
+        existing_versions = []
+        for d in os.listdir(im_dir):
+            if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
+                existing_versions.append(int(d.split("_")[1]))
 
-            self.im_dir = os.path.join(im_dir, f"version_{version}")
-            self.gif_dir = os.path.join(gif_dir, f"version_{version}")
+        if len(existing_versions) == 0:
+            version = 0
+        else:
+            version = max(existing_versions) + 1
+
+        self.im_dir = os.path.join(im_dir, f"version_{version}")
+        self.gif_dir = os.path.join(gif_dir, f"version_{version}")
+
+        if self.ipf.accelerator.is_main_process:
             os.makedirs(self.im_dir, exist_ok=True)
             os.makedirs(self.gif_dir, exist_ok=True)
 

@@ -48,7 +48,6 @@ class UNetModel(nn.Module):
         dims=2,
         num_classes=None,
         use_checkpoint=False,
-        use_fp16=False,
         num_heads=1,
         use_scale_shift_norm=False,
         resblock_updown=False,
@@ -82,13 +81,15 @@ class UNetModel(nn.Module):
         self.conv_resample = conv_resample
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
-        self.dtype = th.float16 if use_fp16 else th.float32
         self.num_heads = num_heads
         self.temb_max_period = temb_max_period
 
-        time_embed_dim = model_channels * 4
+        self.input_ch = int(channel_mult[0] * model_channels)
+        ch = self.input_ch
+
+        time_embed_dim = self.input_ch * 4
         self.time_embed = nn.Sequential(
-            linear(model_channels, time_embed_dim),
+            linear(self.input_ch, time_embed_dim),
             nn.SiLU(inplace=True),
             linear(time_embed_dim, time_embed_dim),
         )
@@ -96,7 +97,6 @@ class UNetModel(nn.Module):
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(num_classes, time_embed_dim)
 
-        ch = input_ch = int(channel_mult[0] * model_channels)
         self.input_blocks = nn.ModuleList(
             [TimestepEmbedSequential(conv_nd(dims, in_channels, ch, 3, padding=1))]
         )
@@ -146,7 +146,6 @@ class UNetModel(nn.Module):
                         )
                     )
                 )
-                ch = out_ch
                 input_block_chans.append(ch)
                 ds *= 2
                 self._feature_size += ch
@@ -219,7 +218,7 @@ class UNetModel(nn.Module):
         self.out = nn.Sequential(
             normalization(ch),
             nn.SiLU(inplace=True),
-            zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
+            zero_module(conv_nd(dims, self.input_ch, out_channels, 3, padding=1)),
         )
 
 
@@ -255,13 +254,13 @@ class UNetModel(nn.Module):
         ), "must specify y if and only if the model is class-conditional"
 
         hs = []
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels, self.temb_max_period))
+        emb = self.time_embed(timestep_embedding(timesteps, self.input_ch, self.temb_max_period))
 
         if self.num_classes is not None:
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
-        h = x.type(self.dtype)
+        h = x  # .type(self.dtype)
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)

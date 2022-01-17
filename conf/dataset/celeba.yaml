@@ -49,7 +49,7 @@ var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size
 
 # device
 device: cuda
-num_workers: 8
+num_workers: 4
 pin_memory: True
 
 # logging

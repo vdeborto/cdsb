@@ -6,4 +6,4 @@ model:
     deg: 2
     basis: rbf
     y_dimwise: False
-    alphas: [1e-6, 1e-3, 1e-1]
+    alphas: [1e-6, 1e-3, 1e-1, 1.]

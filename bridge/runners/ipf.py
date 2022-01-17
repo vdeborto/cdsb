@@ -47,12 +47,18 @@ class IPFBase:
         self.grad_clipping = self.args.grad_clipping
         self.fast_sampling = self.args.fast_sampling
 
-        n = self.num_steps // 2
-        if self.args.gamma_space == 'linspace':
-            gamma_half = np.linspace(self.args.gamma_min, args.gamma_max, n)
-        elif self.args.gamma_space == 'geomspace':
-            gamma_half = np.geomspace(self.args.gamma_min, self.args.gamma_max, n)
-        self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
+        if self.args.symmetric_gamma:
+            n = self.num_steps // 2
+            if self.args.gamma_space == 'linspace':
+                gamma_half = np.linspace(self.args.gamma_min, self.args.gamma_max, n)
+            elif self.args.gamma_space == 'geomspace':
+                gamma_half = np.geomspace(self.args.gamma_min, self.args.gamma_max, n)
+            self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
+        else:
+            if self.args.gamma_space == 'linspace':
+                self.gammas = np.linspace(self.args.gamma_min, self.args.gamma_max, self.num_steps)
+            elif self.args.gamma_space == 'geomspace':
+                self.gammas = np.geomspace(self.args.gamma_min, self.args.gamma_max, self.num_steps)
         self.gammas = torch.tensor(self.gammas).to(self.device)
         self.T = torch.sum(self.gammas)
         self.accelerator.print("T:", self.T.item())
@@ -69,12 +75,12 @@ class IPFBase:
         self.save_logger = self.get_logger('test_logs')
 
         # langevin
-        if self.args.weight_distrib:
-            alpha = self.args.weight_distrib_alpha
-            prob_vec = (1 + alpha) * torch.sum(self.gammas) - torch.cumsum(self.gammas, 0)
-        else:
-            prob_vec = self.gammas * 0 + 1
-        self.time_sampler = torch.distributions.categorical.Categorical(prob_vec)
+        # if self.args.weight_distrib:
+        #     alpha = self.args.weight_distrib_alpha
+        #     prob_vec = (1 + alpha) * torch.sum(self.gammas) - torch.cumsum(self.gammas, 0)
+        # else:
+        #     prob_vec = self.gammas * 0 + 1
+        self.time_sampler = None  # torch.distributions.categorical.Categorical(prob_vec)
 
         # get data
         self.build_dataloaders()
@@ -402,7 +408,7 @@ class IPFBase:
             # self.set_seed(seed=0 + self.accelerator.process_index)
             final_batch_x = final_batch_x.to(self.device)
             y_c = y_c.expand(final_batch_x.shape[0], *self.shape_y).clone().to(self.device)
-            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, sample=True,
+            x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, 'b', sample=True,
                                                                  var_final=var_final)
 
             x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
@@ -427,7 +433,7 @@ class IPFBase:
                 x_tot, _, _, _ = self.langevin.record_init_langevin(init_batch_x, init_batch_y,
                                                                     mean_final=mean_final, var_final=var_final)
             else:
-                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y,
+                x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y, 'f',
                                                                    var_final=var_final)
 
         x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)

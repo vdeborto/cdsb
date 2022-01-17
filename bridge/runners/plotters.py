@@ -174,7 +174,7 @@ class Plotter(object):
                     assert fb == 'f'
                     x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
                 else:
-                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample=True, var_final=var_final)
+                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, fb, sample=True, var_final=var_final)
 
                 stop = time.time()
                 times.append(stop - start)

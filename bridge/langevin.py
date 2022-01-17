@@ -80,9 +80,13 @@ class Langevin(torch.nn.Module):
             
         return x_tot, y_tot, out, steps_expanded
 
-    def record_langevin_seq(self, net, init_samples_x, init_samples_y, sample=False, var_final=None):
+    def record_langevin_seq(self, net, init_samples_x, init_samples_y, fb, sample=False, var_final=None):
         if var_final is None:
             var_final = self.var_final
+        if fb == 'b':
+            gammas = torch.flip(self.gammas, (0,))
+        elif fb == 'f':
+            gammas = self.gammas
 
         x = init_samples_x
         y = init_samples_y
@@ -98,7 +102,7 @@ class Langevin(torch.nn.Module):
         
         if self.mean_match:
             for k in range(num_iter):
-                gamma = self.gammas[k]
+                gamma = gammas[k]
                 if self.double_gamma_scale:
                     gamma = gamma * 2
                 scaled_gamma = gamma
@@ -119,7 +123,7 @@ class Langevin(torch.nn.Module):
                 out[:, k, :] = (t_old - t_new) 
         else:
             for k in range(num_iter):
-                gamma = self.gammas[k]
+                gamma = gammas[k]
                 if self.double_gamma_scale:
                     gamma = gamma * 2
                 scaled_gamma = gamma

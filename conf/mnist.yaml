@@ -26,6 +26,7 @@ paths:
   experiments_dir_name: experiments
   data_dir_name: data
 
+symmetric_gamma: True
 var_final_gamma_scale: False
 double_gamma_scale: True
 langevin_scale: 2*torch.sqrt(gamma)

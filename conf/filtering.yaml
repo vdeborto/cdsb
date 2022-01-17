@@ -31,6 +31,7 @@ paths:
   experiments_dir_name: experiments
   data_dir_name: data
 
+symmetric_gamma: True
 langevin_scale: 2*torch.sqrt(gamma)
 
 # checkpoint

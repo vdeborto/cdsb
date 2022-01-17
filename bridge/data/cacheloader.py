@@ -22,7 +22,7 @@ def CacheLoader(fb, sample_net, dataloader_b, dataloader_f, num_batches, langevi
                                                                           mean_final=mean_final,
                                                                           var_final=var_final)
             else:
-                x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y, var_final=var_final)
+                x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample_direction, var_final=var_final)
 
             # store x, y, out, steps
             gather_x = ipf.accelerator.gather(x)

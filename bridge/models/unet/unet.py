@@ -111,13 +111,13 @@ class UNetModel(nn.Module):
                         ch,
                         time_embed_dim,
                         dropout,
-                        out_channels=mult * model_channels,
+                        out_channels=int(mult * model_channels),
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                     )
                 ]
-                ch = mult * model_channels
+                ch = int(mult * model_channels)
                 if ds in attention_resolutions:
                     layers.append(
                         AttentionBlock(
@@ -177,13 +177,13 @@ class UNetModel(nn.Module):
                         ch + input_block_chans.pop(),
                         time_embed_dim,
                         dropout,
-                        out_channels=model_channels * mult,
+                        out_channels=int(model_channels * mult),
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
                     )
                 ]
-                ch = model_channels * mult
+                ch = int(model_channels * mult)
                 if ds in attention_resolutions:
                     layers.append(
                         AttentionBlock(

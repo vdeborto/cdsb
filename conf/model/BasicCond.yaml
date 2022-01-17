@@ -7,3 +7,4 @@ model:
     temb_dim: 16
     decoder_layers: [128,128]
     temb_max_period: 1000
+    use_fp16: False

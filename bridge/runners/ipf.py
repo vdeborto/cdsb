@@ -21,7 +21,8 @@ class IPFBase:
                  valid_ds=None, test_ds=None):
         super().__init__()
         if accelerator is None:
-            self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu', split_batches=True)
+            self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu',
+                                           fp16=args.model.use_fp16, split_batches=True)
         else:
             self.accelerator = accelerator
         self.device = self.accelerator.device  # local device for each process
@@ -317,7 +318,7 @@ class IPFBase:
                                  self.langevin, self, n,
                                  device='cpu' if self.args.cache_cpu else self.device)
 
-        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True, pin_memory=True)
+        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True, pin_memory=self.args.pin_memory)
 
         new_dl = self.accelerator.prepare(new_dl)
         new_dl = repeater(new_dl)

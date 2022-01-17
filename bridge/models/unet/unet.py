@@ -48,6 +48,7 @@ class UNetModel(nn.Module):
         dims=2,
         num_classes=None,
         use_checkpoint=False,
+        use_fp16=False,
         num_heads=1,
         use_scale_shift_norm=False,
         resblock_updown=False,
@@ -81,6 +82,7 @@ class UNetModel(nn.Module):
         self.conv_resample = conv_resample
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
+        self.dtype = th.float16 if use_fp16 else th.float32
         self.num_heads = num_heads
         self.temb_max_period = temb_max_period
 
@@ -94,15 +96,12 @@ class UNetModel(nn.Module):
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(num_classes, time_embed_dim)
 
+        ch = input_ch = int(channel_mult[0] * model_channels)
         self.input_blocks = nn.ModuleList(
-            [
-                TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1)
-                )
-            ]
+            [TimestepEmbedSequential(conv_nd(dims, in_channels, ch, 3, padding=1))]
         )
-        input_block_chans = [model_channels]
-        ch = model_channels
+        self._feature_size = ch
+        input_block_chans = [ch]
         ds = 1
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
@@ -125,6 +124,7 @@ class UNetModel(nn.Module):
                         )
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
+                self._feature_size += ch
                 input_block_chans.append(ch)
             if level != len(channel_mult) - 1:
                 out_ch = ch
@@ -146,8 +146,10 @@ class UNetModel(nn.Module):
                         )
                     )
                 )
+                ch = out_ch
                 input_block_chans.append(ch)
                 ds *= 2
+                self._feature_size += ch
 
         self.middle_block = TimestepEmbedSequential(
             ResBlock(
@@ -168,13 +170,15 @@ class UNetModel(nn.Module):
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
         )
+        self._feature_size += ch
 
         self.output_blocks = nn.ModuleList([])
         for level, mult in list(enumerate(channel_mult))[::-1]:
             for i in range(num_res_blocks + 1):
+                ich = input_block_chans.pop()
                 layers = [
                     ResBlock(
-                        ch + input_block_chans.pop(),
+                        ch + ich,
                         time_embed_dim,
                         dropout,
                         out_channels=int(model_channels * mult),
@@ -210,11 +214,12 @@ class UNetModel(nn.Module):
                     )
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
+                self._feature_size += ch
 
         self.out = nn.Sequential(
             normalization(ch),
             nn.SiLU(inplace=True),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
         )
 
 
@@ -256,7 +261,7 @@ class UNetModel(nn.Module):
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
 
-        h = x#.type(self.inner_dtype)
+        h = x.type(self.dtype)
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)

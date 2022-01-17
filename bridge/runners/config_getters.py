@@ -98,6 +98,7 @@ def get_models(args):
             "channel_mult": channel_mult,
             "num_classes": None,
             "use_checkpoint": args.model.use_checkpoint,
+            "use_fp16": args.model.use_fp16,
             "num_heads": args.model.num_heads,
             "use_scale_shift_norm": args.model.use_scale_shift_norm,
             "resblock_updown": args.model.resblock_updown,

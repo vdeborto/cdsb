@@ -60,7 +60,7 @@ test_npar: 100
 
 # training
 cache_refresh_stride: 2000
-cache_npar: 250
+cache_npar: 256
 num_cache_batches: 20
 use_prev_net: True
 ema: True

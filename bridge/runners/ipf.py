@@ -65,6 +65,7 @@ class IPFBase:
         self.accelerator.print("T:", self.T.item())
 
         # get models
+        self.first_pass = True
         self.build_models()
         self.build_ema()
 
@@ -115,7 +116,6 @@ class IPFBase:
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
             self.checkpoint_iter = 1
-        self.first_pass = True
 
         if not self.args.nosave:
             self.plotter = self.get_plotter()

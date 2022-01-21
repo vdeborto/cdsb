@@ -110,9 +110,11 @@ class IPFBase:
         if self.args.checkpoint_run:
             self.checkpoint_it = self.args.checkpoint_it
             self.checkpoint_pass = self.args.checkpoint_pass
+            self.checkpoint_iter = self.args.checkpoint_iter + 1
         else:
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
+            self.checkpoint_iter = 1
 
         if not self.args.nosave:
             self.plotter = self.get_plotter()
@@ -504,7 +506,7 @@ class IPFSequential(IPFBase):
         self.build_optimizer(forward_or_backward)
         self.accelerate(forward_or_backward)
 
-        for i in tqdm(range(1, self.num_iter + 1)):
+        for i in tqdm(range(self.checkpoint_iter, self.num_iter + 1)):
             self.net[forward_or_backward].train()
 
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)

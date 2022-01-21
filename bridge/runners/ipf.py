@@ -115,6 +115,7 @@ class IPFBase:
             self.checkpoint_it = 1
             self.checkpoint_pass = 'b'
             self.checkpoint_iter = 1
+        self.first_pass = True
 
         if not self.args.nosave:
             self.plotter = self.get_plotter()
@@ -181,7 +182,7 @@ class IPFBase:
         # running network
         net_f, net_b = get_models(self.args)
 
-        if self.args.checkpoint_run:
+        if self.first_pass and self.args.checkpoint_run:
             if self.args.checkpoint_f is not None:
                 net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f)))
             if self.args.checkpoint_b is not None:
@@ -213,7 +214,7 @@ class IPFBase:
             self.update_ema('f')
             self.update_ema('b')
 
-            if self.args.checkpoint_run:
+            if self.first_pass and self.args.checkpoint_run:
                 # sample network
                 sample_net_f, sample_net_b = get_models(self.args)
 
@@ -499,7 +500,7 @@ class IPFSequential(IPFBase):
     def ipf_step(self, forward_or_backward, n):
         new_dl = self.new_cacheloader(forward_or_backward, n)
 
-        if not self.args.use_prev_net:
+        if (not self.first_pass) and (not self.args.use_prev_net):
             self.build_models(forward_or_backward)
             self.update_ema(forward_or_backward)
 
@@ -512,10 +513,6 @@ class IPFSequential(IPFBase):
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)
 
             x, y, out, steps_expanded = next(new_dl)
-            # x = x.to(self.device)
-            # y = y.to(self.device)
-            # out = out.to(self.device)
-            # steps_expanded = steps_expanded.to(self.device)
             eval_steps = self.num_steps - 1 - steps_expanded
 
             if self.args.mean_match:
@@ -557,6 +554,7 @@ class IPFSequential(IPFBase):
 
         self.net[forward_or_backward] = self.accelerator.unwrap_model(self.net[forward_or_backward])
         self.clear()
+        self.first_pass = False
 
 
 class IPFAnalytic(IPFBase):
@@ -609,3 +607,4 @@ class IPFAnalytic(IPFBase):
                 if self.accelerator.is_main_process:
                     self.save_logger.log_metrics(test_metrics, step=0)
 
+        self.first_pass = False

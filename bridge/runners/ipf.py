@@ -507,7 +507,12 @@ class IPFSequential(IPFBase):
         self.build_optimizer(forward_or_backward)
         self.accelerate(forward_or_backward)
 
-        for i in tqdm(range(self.checkpoint_iter, self.num_iter + 1)):
+        if self.first_pass:
+            checkpoint_iter = self.checkpoint_iter
+        else:
+            checkpoint_iter = 1
+
+        for i in tqdm(range(checkpoint_iter, self.num_iter + 1)):
             self.net[forward_or_backward].train()
 
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)

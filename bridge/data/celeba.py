@@ -1,4 +1,7 @@
+import os
+import numpy as np
 import torch
+import PIL
 from torchvision.datasets import CelebA as _CelebA
 
 
@@ -7,7 +10,7 @@ class CelebA(_CelebA):
         super().__init__(root, split=split, target_type=target_type, transform=transform, target_transform=target_transform, download=download)
         self.filename = np.array(self.filename).astype(np.string_)
     
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+    def __getitem__(self, index: int):
         X = PIL.Image.open(os.path.join(self.root, self.base_folder, "img_align_celeba", str(self.filename[index], encoding='utf-8')))
         
         target: Any = []

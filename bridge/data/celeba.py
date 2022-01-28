@@ -9,12 +9,14 @@ class CelebA(_CelebA):
     def __init__(self, root, split="train", target_type="attr", transform=None, target_transform=None, download=False):
         super().__init__(root, split=split, target_type=target_type, transform=transform, target_transform=target_transform, download=download)
         self.filename = np.array(self.filename).astype(np.string_)
+        self.target_type = np.array(self.target_type).astype(np.string_)
     
     def __getitem__(self, index: int):
         X = PIL.Image.open(os.path.join(self.root, self.base_folder, "img_align_celeba", str(self.filename[index], encoding='utf-8')))
         
-        target: Any = []
+        target = []
         for t in self.target_type:
+            t = str(t, encoding='utf-8')
             if t == "attr":
                 target.append(self.attr[index, :])
             elif t == "identity":

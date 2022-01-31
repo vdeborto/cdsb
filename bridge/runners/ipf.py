@@ -476,17 +476,17 @@ class IPFSequential(IPFBase):
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                 torch.save(self.net[fb].state_dict(), name_net_ckpt)
-                if self.args.LOGGER == 'Wandb':
-                    import wandb
-                    wandb.save(name_net_ckpt)
+                # if self.args.LOGGER == 'Wandb':
+                #     import wandb
+                #     wandb.save(name_net_ckpt)
 
                 if self.args.ema:
                     name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                     name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                     torch.save(sample_net.state_dict(), name_net_ckpt)
-                    if self.args.LOGGER == 'Wandb':
-                        import wandb
-                        wandb.save(name_net_ckpt)
+                    # if self.args.LOGGER == 'Wandb':
+                    #     import wandb
+                    #     wandb.save(name_net_ckpt)
 
             if not self.args.nosave:
                 sample_net = sample_net.to(self.device)

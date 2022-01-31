@@ -34,28 +34,28 @@ pin_memory: True
 
 # logging
 log_stride: 10
-gif_stride: 5000
-plot_npar: 1000
+gif_stride: 10000
+plot_npar: 100
 test_npar: 100
 
 # training
-cache_refresh_stride: 2000
-cache_npar: 2000
-num_cache_batches: 1
-use_prev_net: False
+cache_refresh_stride: 500
+cache_npar: 1600
+num_cache_batches: 2
+use_prev_net: True
 ema: True
 ema_rate: 0.999
 grad_clipping: True
 grad_clip: 1.0
 batch_size: 128
 num_iter: 5000
-n_ipf: 20
+n_ipf: 25
 lr: 0.0001
 
 # schedule
-num_steps: 30
+num_steps: 20
 gamma_max: 0.1
-gamma_min: 0.00001
+gamma_min: 0.00005
 gamma_space: linspace
 weight_distrib: True
 weight_distrib_alpha: 100

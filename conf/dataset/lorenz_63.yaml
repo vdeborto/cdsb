@@ -27,7 +27,7 @@ cond_final: False
 cond_final_model:
   MODEL: EnKF
   std_scale: 1.
-update_cond_final_ens: False
+update_cond_final_ens: True
 
 
 adaptive_mean: False

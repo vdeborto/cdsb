@@ -467,7 +467,7 @@ class IPFBase:
 
 class IPFSequential(IPFBase):
     def save_step(self, i, n, fb):
-        if i == 1 or i % self.stride == 0 or i == self.num_iter:
+        if (self.first_pass and i == 1) or i % self.stride == 0 or i == self.num_iter:
             sample_net = self.get_sample_net(fb)
 
             if self.accelerator.is_main_process:

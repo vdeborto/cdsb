@@ -321,7 +321,9 @@ class IPFBase:
                                  self.langevin, self, n,
                                  device='cpu' if self.args.cache_cpu else self.device)
 
-        new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True, pin_memory=self.args.pin_memory)
+        assert self.batch_size % self.accelerator.num_processes == 0
+        new_dl = DataLoader(new_ds, batch_size=self.batch_size // self.accelerator.num_processes, shuffle=True,
+                            drop_last=True, pin_memory=self.args.pin_memory)
 
         # new_dl = self.accelerator.prepare(new_dl)
         new_dl = repeater(new_dl)

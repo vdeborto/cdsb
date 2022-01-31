@@ -25,20 +25,15 @@ def CacheLoader(fb, sample_net, dataloader_b, dataloader_f, num_batches, langevi
                 x, y, out, steps_expanded = langevin.record_langevin_seq(sample_net, batch_x, batch_y, sample_direction, var_final=var_final)
 
             # store x, y, out, steps
-            gather_x = ipf.accelerator.gather(x)
-            gather_y = ipf.accelerator.gather(y)
-            gather_out = ipf.accelerator.gather(out)
-            gather_steps = ipf.accelerator.gather(steps_expanded)
+            x = x.flatten(start_dim=0, end_dim=1).to(device)
+            y = y.flatten(start_dim=0, end_dim=1).to(device)
+            out = out.flatten(start_dim=0, end_dim=1).to(device)
+            steps_expanded = steps_expanded.flatten(start_dim=0, end_dim=1).to(device)
 
-            gather_x = gather_x.flatten(start_dim=0, end_dim=1).to(device)
-            gather_y = gather_y.flatten(start_dim=0, end_dim=1).to(device)
-            gather_out = gather_out.flatten(start_dim=0, end_dim=1).to(device)
-            gather_steps = gather_steps.flatten(start_dim=0, end_dim=1).to(device)
-
-            all_x.append(gather_x)
-            all_y.append(gather_y)
-            all_out.append(gather_out)
-            all_steps.append(gather_steps)
+            all_x.append(x)
+            all_y.append(y)
+            all_out.append(out)
+            all_steps.append(steps_expanded)
 
     all_x = torch.cat(all_x, dim=0)
     all_y = torch.cat(all_y, dim=0)

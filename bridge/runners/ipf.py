@@ -323,7 +323,7 @@ class IPFBase:
 
         new_dl = DataLoader(new_ds, batch_size=self.batch_size, shuffle=True, drop_last=True, pin_memory=self.args.pin_memory)
 
-        new_dl = self.accelerator.prepare(new_dl)
+        # new_dl = self.accelerator.prepare(new_dl)
         new_dl = repeater(new_dl)
         return new_dl
 
@@ -518,6 +518,12 @@ class IPFSequential(IPFBase):
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)
 
             x, y, out, steps_expanded = next(new_dl)
+
+            x = x.to(self.device)
+            y = y.to(self.device)
+            out = out.to(self.device)
+            steps_expanded = steps_expanded.to(self.device)
+
             eval_steps = self.num_steps - 1 - steps_expanded
 
             if self.args.mean_match:

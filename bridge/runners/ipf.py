@@ -70,7 +70,7 @@ class IPFBase:
         self.build_ema()
 
         # get optims
-        # self.build_optimizers()
+        self.build_optimizers()
 
         # get loggers
         self.logger = self.get_logger('train_logs')
@@ -229,9 +229,21 @@ class IPFBase:
                     sample_net_b = sample_net_b.to(self.device)
                     self.ema_helpers['b'].register(sample_net_b)
 
-    def build_optimizer(self, forward_or_backward):
-        optimizer = get_optimizer(self.net[forward_or_backward], self.args)
-        self.optimizer = {forward_or_backward: optimizer}
+    def build_optimizers(self, forward_or_backward=None):
+        optimizer_f, optimizer_b = get_optimizer(self.net['f'], self.args), get_optimizer(self.net['b'], self.args)
+
+        if self.first_pass and self.args.checkpoint_run:
+            if self.args.optimizer_checkpoint_f is not None:
+                optimizer_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_f)))
+            if self.args.optimizer_checkpoint_b is not None:
+                optimizer_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_b)))
+
+        if forward_or_backward is None:
+            self.optimizer = {'f': optimizer_f, 'b': optimizer_b}
+        if forward_or_backward == 'f':
+            self.optimizer.update({'f': optimizer_f})
+        if forward_or_backward == 'b':
+            self.optimizer.update({'b': optimizer_b})
 
     def build_dataloaders(self):
         def worker_init_fn(worker_id):
@@ -476,6 +488,9 @@ class IPFSequential(IPFBase):
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                 torch.save(self.net[fb].state_dict(), name_net_ckpt)
+                name_opt = 'optimizer' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
+                name_opt_ckpt = os.path.join(self.ckpt_dir, name_opt)
+                torch.save(self.optimizer[fb].state_dict(), name_opt_ckpt)
                 # if self.args.LOGGER == 'Wandb':
                 #     import wandb
                 #     wandb.save(name_net_ckpt)
@@ -505,8 +520,8 @@ class IPFSequential(IPFBase):
         if (not self.first_pass) and (not self.args.use_prev_net):
             self.build_models(forward_or_backward)
             self.update_ema(forward_or_backward)
+            self.build_optimizers(forward_or_backward)
 
-        self.build_optimizer(forward_or_backward)
         self.accelerate(forward_or_backward)
 
         if self.first_pass:

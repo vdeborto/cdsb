@@ -48,30 +48,33 @@ class Stacked_MNIST(Dataset):
 
     def save_split_data(self, split):
         if split == 'train':
-            self.data = self.data[:-10000]
-            self.targets = self.targets[:-10000]
+            data = self.data[:-10000]
+            targets = self.targets[:-10000]
 
-            assert torch.all(self.targets[:10] == torch.tensor([1, 1, 4, 4, 9, 6, 7, 5, 3, 4]))
+            assert torch.all(targets[:10] == torch.tensor([1, 1, 4, 4, 9, 6, 7, 5, 3, 4]))
         elif split == 'valid':
-            self.data = self.data[-10000:]
-            self.targets = self.targets[-10000:]
+            data = self.data[-10000:]
+            targets = self.targets[-10000:]
 
-            assert torch.all(self.targets[:10] == torch.tensor([5, 9, 2, 9, 9, 4, 5, 6, 1, 4]))
+            assert torch.all(targets[:10] == torch.tensor([3, 4, 4, 4, 3, 4, 1, 1, 2, 9]))
         elif split == 'test':
-            assert torch.all(self.targets[:10] == torch.tensor([5, 1, 7, 1, 6, 1, 7, 5, 0, 2]))
+            data = self.data
+            targets = self.targets
 
-        torch.save(self.data, os.path.join(self.root, f"data_x_{split}.pt"))
-        torch.save(self.targets, os.path.join(self.root, f"targets_{split}.pt"))
+            assert torch.all(targets[:10] == torch.tensor([5, 1, 7, 1, 6, 1, 7, 5, 0, 2]))
 
-        save_image(self.data[:100], os.path.join(self.root, f"data_x_{split}.png"), nrow=10)
+        torch.save(data, os.path.join(self.root, f"data_x_{split}.pt"))
+        torch.save(targets, os.path.join(self.root, f"targets_{split}.pt"))
+
+        save_image(data[:100], os.path.join(self.root, f"data_x_{split}.png"), nrow=10)
 
         im_dir = self.root + f'/im_{split}'
         if os.path.exists(im_dir):
             shutil.rmtree(im_dir)
         os.makedirs(im_dir)
 
-        for k in range(len(self.data)):
-            im = self.data[k]
+        for k in range(len(data)):
+            im = data[k]
             filename = os.path.join(im_dir, '{:05}.png'.format(k))
             save_image(im, filename)
         

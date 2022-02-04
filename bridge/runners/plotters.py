@@ -386,20 +386,20 @@ class Plotter(object):
         out = {}
         if dl_name == 'train':
             x_last = x_tot[-1]
-    
+
             x_var_last = torch.var(x_last, dim=0).mean().item()
             x_var_start = torch.var(x_start, dim=0).mean().item()
             x_mean_last = torch.mean(x_last).item()
             x_mean_start = torch.mean(x_start).item()
-    
+
             out = {'x_mean_start': x_mean_start, 'x_var_start': x_var_start,
                    'x_mean_last': x_mean_last, 'x_var_last': x_var_last}
-    
+
             if mean_final is not None:
                 x_mse_last = torch.mean((x_last - mean_final) ** 2)
                 x_mse_start = torch.mean((x_start - mean_final) ** 2)
                 out.update({"x_mse_start": x_mse_start, "x_mse_last": x_mse_last})
-    
+
         return out
 
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
@@ -698,7 +698,7 @@ class OneDCondPlotter(Plotter):
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        iter_name = str(i) + '_' + fb + '_' + str(n) + '_'
+        iter_name = str(i) + '_' + fb + '_' + str(n)
         im_dir = os.path.join(self.im_dir, iter_name, 'cond')
         gif_dir = os.path.join(self.gif_dir, 'cond')
 
@@ -856,7 +856,7 @@ class FiveDCondPlotter(Plotter):
     def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
         if freq is None:
             freq = self.num_steps//min(self.num_steps,50)
-        iter_name = str(i) + '_' + fb + '_' + str(n) + '_'
+        iter_name = str(i) + '_' + fb + '_' + str(n)
         im_dir = os.path.join(self.im_dir, iter_name, 'cond')
         gif_dir = os.path.join(self.gif_dir, 'cond')
 
@@ -977,47 +977,68 @@ class FiveDCondPlotter(Plotter):
 
 
 class BiochemicalPlotter(Plotter):
-    def plot(self, x_start, x_tot, y_tot, data, init_dl, y_cond, x_tot_cond, i, n, forward_or_backward):
-        fb = forward_or_backward
-        ipf_it = n
-        x_tot = x_tot.cpu().numpy()
-        y_tot = y_tot.cpu().numpy()
-        name = str(i) + '_' + fb +'_' + str(n) + '_'
+    def plot_sequence_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag='', freq=None):
+        if freq is None:
+            freq = self.num_steps//min(self.num_steps,50)
+        iter_name = str(i) + '_' + fb + '_' + str(n)
+        im_dir = os.path.join(self.im_dir, iter_name, 'cond')
+        gif_dir = os.path.join(self.gif_dir, 'cond')
 
-        self.save_sequence_cond_biochemical(num_steps=self.num_steps, x=x_tot, y=y_tot,
-                           data=data, init_dl=init_dl, y_cond=y_cond,
-                           x_tot_cond=x_tot_cond, fb=fb, name=name,
-                           ipf_it=ipf_it,
-                           freq=self.num_steps//min(self.num_steps,50),
-                           im_dir=self.im_dir, gif_dir=self.gif_dir)
+        os.makedirs(im_dir, exist_ok=True)
+        os.makedirs(gif_dir, exist_ok=True)
 
-    @staticmethod
-    def save_sequence_cond_biochemical(num_steps, x, y, data, init_dl, y_cond, x_tot_cond, fb, name='', im_dir='./im', gif_dir = './gif', ipf_it=None, freq=1):
         xlim = [-0.5, 1.5]
         ylim = [-0.5, 2.5]
         npts = 100
 
-        x_tot = x_tot_cond[0].cpu().numpy()
+        x_start = x_start[0].cpu().numpy()
+        x_tot_cond = x_tot_cond[0].cpu().numpy()
+        x_start_tot_cond = np.concatenate([np.expand_dims(x_start, axis=0), x_tot_cond], axis=0)
 
         # DENSITY
-        # ROLES OF X AND Y inversed when compared to Conditional Sampling.
-
-        name_gif = name + 'density'
+        plot_name = 'cond_density_' + tag
+        name_gif = f'{iter_name}_{plot_name}'
         plot_paths_reg = []
-        for k in range(num_steps):
-            if k % freq == 0 or k == num_steps:
-                filename =  name + 'density_' + str(k) + '.png'
+
+        for k in range(self.num_steps+1):
+            if k % freq == 0 or k == self.num_steps:
+                filename = plot_name + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
-                plt.clf()            
-                if ipf_it is not None:
-                    str_title = 'IPFP iteration: ' + str(ipf_it)
+                plt.clf()
+                if n is not None:
+                    str_title = 'IPFP iteration: ' + str(n)
                     plt.title(str_title)
-                kde_xy = kde.gaussian_kde([x_tot[k, :, 0],x_tot[k, :, 1]])
+                kde_xy = kde.gaussian_kde([x_start_tot_cond[k, :, 0], x_start_tot_cond[k, :, 1]])
                 xi, yi = np.mgrid[xlim[0]:xlim[1]:npts*1j, ylim[0]:ylim[1]:npts*1j]
                 zi = kde_xy(np.vstack([xi.flatten(), yi.flatten()]))
                 plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
 
-        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)    
-    
+        make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
+
+    def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
+                                  x_init_cond=None, tag='fwdbwd', freq=None):
+        self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
+
+    def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
+        out = super().test_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag)
+
+        if fb == 'b' and y_cond is not None:
+            x_last_cond = x_tot_cond[0, -1]
+            x_last_cond_std, x_last_cond_mean = torch.std_mean(x_last_cond, 0)
+            x_last_cond_var = x_last_cond_std ** 2
+            x_last_cond_zscores = (x_last_cond - x_last_cond_mean) / x_last_cond_std
+            x_last_cond_skew = torch.mean(x_last_cond_zscores**3, 0)
+            x_last_cond_kurtosis = torch.mean(x_last_cond_zscores**4, 0)
+
+            out["cond/x0_mean_" + tag] = x_last_cond_mean[0]
+            out["cond/x1_mean_" + tag] = x_last_cond_mean[1]
+            out["cond/x0_var_" + tag] = x_last_cond_var[0]
+            out["cond/x1_var_" + tag] = x_last_cond_var[1]
+            out["cond/x0_skew_" + tag] = x_last_cond_skew[0]
+            out["cond/x1_skew_" + tag] = x_last_cond_skew[1]
+            out["cond/x0_kurt_" + tag] = x_last_cond_kurtosis[0]
+            out["cond/x1_kurt_" + tag] = x_last_cond_kurtosis[1]
+
+        return out

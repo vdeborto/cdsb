@@ -2,7 +2,7 @@ import torch
 from omegaconf import OmegaConf
 import hydra
 from ..models import *
-# from ..data.biochemical import biochemical_ds
+from ..data.biochemical import biochemical_ds
 from ..data.one_dim_cond import one_dim_cond_ds
 from ..data.one_dim_rev_cond import one_dim_rev_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
@@ -205,9 +205,12 @@ def get_datasets(args):
     # BIOCHEMICAL
 
     if dataset_tag == DATASET_BIOCHEMICAL:
+        assert args.x_dim == 2
+        assert args.y_dim == 5
         data_tag = args.data.dataset
         npar = args.npar
-        init_ds = biochemical_ds(npar, data_tag)
+        root = os.path.join(data_dir, 'biochemical')
+        init_ds = biochemical_ds(root, npar, data_tag)
 
     # 1D CONDITIONAL DATASET
 

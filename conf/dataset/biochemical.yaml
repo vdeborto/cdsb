@@ -1,0 +1,62 @@
+# @package _global_
+
+Dataset: biochemical
+
+x_dim: 2
+y_dim: 5
+
+# conditioning
+data:
+  dataset: type1
+y_cond:
+  - torch.tensor([0.18,0.32,0.42,0.49,0.54])
+x_cond_true: null
+
+# transfer
+transfer: False
+Dataset_transfer: 2d
+data_transfer: circle
+cond_final: False
+
+
+adaptive_mean: False
+final_adaptive: False
+mean_final: torch.tensor([0.])
+var_final: 1.*torch.tensor([1.])
+
+
+# device
+device: cpu
+num_workers: 0
+pin_memory: False
+
+# training
+use_prev_net: False
+mean_match: False
+ema: False
+ema_rate: 0.999
+grad_clipping: False
+grad_clip: 1.0
+npar: 50000
+batch_size: 2000
+num_iter: 20000
+cache_npar: 20000
+n_ipf: 20
+lr: 0.0001
+
+# schedule
+num_steps: 50
+gamma_max: 0.005
+gamma_min: 0.005
+gamma_space: linspace
+weight_distrib: False
+weight_distrib_alpha: 100
+fast_sampling: True
+
+
+# logging
+plot_npar: 2000
+test_npar: 30000
+log_stride: 50
+gif_stride: ${num_iter}
+

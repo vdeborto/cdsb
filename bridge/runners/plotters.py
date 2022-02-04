@@ -149,7 +149,7 @@ class Plotter(object):
                                                    x_tot_fwd_cond[:, :, :self.args.plot_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.plot_npar],
                                                    self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true)
                     out.update(self.test_cond(x_tot_fwd_cond[:, -1, :self.args.test_npar], self.ipf.y_cond, x_tot_fwdbwd_cond[:, :, :self.args.test_npar],
-                                              self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true))
+                                              self.dataset, i, n, fb, x_init_cond=self.ipf.x_cond_true, tag='fwdbwd'))
                     out["cond/batch_sample_time_fwdbwd"] = np.mean(time_cond)
 
         torch.cuda.empty_cache()

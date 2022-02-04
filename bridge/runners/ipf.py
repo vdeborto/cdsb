@@ -490,7 +490,7 @@ class IPFSequential(IPFBase):
                 torch.save(self.net[fb].state_dict(), name_net_ckpt)
                 name_opt = 'optimizer' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_opt_ckpt = os.path.join(self.ckpt_dir, name_opt)
-                torch.save(self.optimizer[fb].state_dict(), name_opt_ckpt)
+                torch.save(self.optimizer[fb].optimizer.state_dict(), name_opt_ckpt)
                 # if self.args.LOGGER == 'Wandb':
                 #     import wandb
                 #     wandb.save(name_net_ckpt)

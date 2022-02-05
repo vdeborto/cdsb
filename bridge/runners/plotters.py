@@ -755,7 +755,8 @@ class OneDCondPlotter(Plotter):
                     x_cond = x_start_tot_cond[j][k, :, 0]
 
                     plt.plot(x_lin, zs_lin[j], color=colors[j])
-                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j])
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.6,
+                             edgecolor='black', linewidth=1)
 
                 filename = plot_name + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)
@@ -949,7 +950,7 @@ class FiveDCondPlotter(Plotter):
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
         out = super().test_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag)
 
-        if fb == 'b' and y_cond is not None:
+        if y_cond is not None:
             if data == 'type1':
                 true_x_test_mean = (y_cond[:, 0]**2 + torch.exp(y_cond[:, 1] + y_cond[:, 2]/3) + torch.sin(y_cond[:, 3] + y_cond[:, 4])).unsqueeze(1)
                 true_x_test_std = torch.ones(2000, 1)
@@ -1024,7 +1025,7 @@ class BiochemicalPlotter(Plotter):
     def test_cond(self, x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=None, tag=''):
         out = super().test_cond(x_start, y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag)
 
-        if fb == 'b' and y_cond is not None:
+        if y_cond is not None:
             x_last_cond = x_tot_cond[0, -1]
             x_last_cond_std, x_last_cond_mean = torch.std_mean(x_last_cond, 0)
             x_last_cond_var = x_last_cond_std ** 2

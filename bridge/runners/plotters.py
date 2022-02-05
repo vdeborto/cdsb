@@ -710,10 +710,10 @@ class OneDCondPlotter(Plotter):
             xlim = [-1,3]
             colors = ['red', 'green', 'blue']
         elif data == 'type2':
-            xlim = [-1,1]
+            xlim = [-1.3,1.3]
             colors = ['red', 'green', 'blue']
         elif data == 'type3':
-            xlim = [-0.8,0.8]
+            xlim = [-2.2,2.2]
             colors = ['red', 'blue']
 
         x_start = x_start.cpu().numpy()

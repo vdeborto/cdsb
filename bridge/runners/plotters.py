@@ -755,7 +755,7 @@ class OneDCondPlotter(Plotter):
                     x_cond = x_start_tot_cond[j][k, :, 0]
 
                     plt.plot(x_lin, zs_lin[j], color=colors[j])
-                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.6,
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.5,
                              edgecolor='black', linewidth=1)
 
                 filename = plot_name + '_' + str(k) + '.png'
@@ -790,6 +790,33 @@ class OneDCondPlotter(Plotter):
 
             out[dl_name + "/l2_pq"] = np.mean((data_kde(batch) - last_kde(batch)) ** 2)
             out[dl_name + "/kl_pq"] = np.mean(np.log(data_kde(batch)) - np.log(last_kde(batch)))
+
+            if data == 'type1':
+                data_logpdf = gamma.logpdf(x_init[:, 0] - np.tanh(y_start[:, 0]), 1, scale=0.3) - np.log(6)
+            elif data == 'type2':
+                sigma = np.sqrt(0.05)
+                z1 = - np.log(1 - x_init[:, 0]**2)
+                z2 = np.arctanh(x_init[:, 0])
+                z3 = norm.logpdf(z2, loc=y_start[:, 0], scale=sigma)
+                data_logpdf = z3 + z1 - np.log(6)
+            elif data == 'type3':
+                data_logpdf = gamma.logpdf(x_init[:, 0] / np.tanh(y_start[:, 0]), 1, scale=0.3) - np.log(6)
+            out[dl_name + "/analytic_kl_pq"] = np.mean(data_logpdf - np.log(last_kde(batch)))
+
+            batch = np.hstack([x_last, y_start])
+            out[dl_name + "/kl_qp"] = np.mean(np.log(last_kde(batch)) - np.log(data_kde(batch)))
+
+            if data == 'type1':
+                last_logpdf = gamma.logpdf(x_last[:, 0] - np.tanh(y_start[:, 0]), 1, scale=0.3) - np.log(6)
+            elif data == 'type2':
+                sigma = np.sqrt(0.05)
+                z1 = - np.log(1 - x_last[:, 0]**2)
+                z2 = np.arctanh(x_last[:, 0])
+                z3 = norm.logpdf(z2, loc=y_start[:, 0], scale=sigma)
+                last_logpdf = z3 + z1 - np.log(6)
+            elif data == 'type3':
+                last_logpdf = gamma.logpdf(x_last[:, 0] / np.tanh(y_start[:, 0]), 1, scale=0.3) - np.log(6)
+            out[dl_name + "/analytic_kl_qp"] = np.mean(np.log(last_kde(batch)) - last_logpdf)
 
         return out
 

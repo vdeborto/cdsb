@@ -749,13 +749,14 @@ class OneDCondPlotter(Plotter):
         for k in range(self.num_steps+1):
             if k % freq == 0 or k == self.num_steps:
                 plt.clf()
+                plt.figure(figsize=(4, 3))
                 for j in range(len(y_cond)):
                     y_c = y_cond[j]
 
                     x_cond = x_start_tot_cond[j][k, :, 0]
 
                     plt.plot(x_lin, zs_lin[j], color=colors[j])
-                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.5,
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.7,
                              edgecolor='black', linewidth=1)
 
                 filename = plot_name + '_' + str(k) + '.png'
@@ -766,6 +767,7 @@ class OneDCondPlotter(Plotter):
                     plt.title(str_title)
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
+                plt.close()
 
         make_gif(plot_paths_reg, output_directory=gif_dir, gif_name=name_gif)
 

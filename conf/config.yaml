@@ -42,3 +42,5 @@ sample_checkpoint_f: null
 sample_checkpoint_b: null
 checkpoint_f: null
 checkpoint_b: null
+optimizer_checkpoint_f: null
+optimizer_checkpoint_b: null

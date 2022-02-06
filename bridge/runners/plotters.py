@@ -756,7 +756,7 @@ class OneDCondPlotter(Plotter):
                     x_cond = x_start_tot_cond[j][k, :, 0]
 
                     plt.plot(x_lin, zs_lin[j], color=colors[j], lw=1)
-                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.5,
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.6,
                              edgecolor='black', lw=1)
 
                 filename = plot_name + '_' + str(k) + '.png'

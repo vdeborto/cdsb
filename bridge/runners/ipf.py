@@ -248,20 +248,7 @@ class IPFBase:
                     self.ema_helpers['b'].register(sample_net_b)
 
     def build_optimizers(self, forward_or_backward=None):
-        optimizer_f, optimizer_b = get_optimizer(self.net['f'], self.args), get_optimizer(self.net['b'], self.args)
-
-        if self.first_pass and self.args.checkpoint_run:
-            if self.args.optimizer_checkpoint_f is not None:
-                optimizer_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_f)))
-            if self.args.optimizer_checkpoint_b is not None:
-                optimizer_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_b)))
-
-        if forward_or_backward is None:
-            self.optimizer = {'f': optimizer_f, 'b': optimizer_b}
-        if forward_or_backward == 'f':
-            self.optimizer.update({'f': optimizer_f})
-        if forward_or_backward == 'b':
-            self.optimizer.update({'b': optimizer_b})
+        pass
 
     def build_dataloaders(self):
         def worker_init_fn(worker_id):
@@ -498,6 +485,22 @@ class IPFBase:
 
 
 class IPFSequential(IPFBase):
+    def build_optimizers(self, forward_or_backward=None):
+        optimizer_f, optimizer_b = get_optimizer(self.net['f'], self.args), get_optimizer(self.net['b'], self.args)
+
+        if self.first_pass and self.args.checkpoint_run:
+            if self.args.optimizer_checkpoint_f is not None:
+                optimizer_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_f)))
+            if self.args.optimizer_checkpoint_b is not None:
+                optimizer_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.optimizer_checkpoint_b)))
+
+        if forward_or_backward is None:
+            self.optimizer = {'f': optimizer_f, 'b': optimizer_b}
+        if forward_or_backward == 'f':
+            self.optimizer.update({'f': optimizer_f})
+        if forward_or_backward == 'b':
+            self.optimizer.update({'b': optimizer_b})
+
     def save_step(self, i, n, fb):
         if (self.first_pass and i == 1) or i % self.stride == 0 or i == self.num_iter:
             sample_net = self.get_sample_net(fb)

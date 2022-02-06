@@ -62,7 +62,7 @@ def forward_dist_fn(data, args):
 
         def F_fn(x, t):
             for _ in range(int(dt/delta)):
-                x = RK45_step(f, 0, x, delta)
+                x = RK4_step(f, 0, x, delta)
             return Independent(Normal(x, x_std), 1)
 
         class G_module:

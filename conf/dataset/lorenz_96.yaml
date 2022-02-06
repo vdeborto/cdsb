@@ -3,8 +3,8 @@
 Dataset: lorenz
 nosave: True
 
-x_dim: 5
-y_dim: 3
+x_dim: 40
+y_dim: 20
 
 ens_size: 200
 

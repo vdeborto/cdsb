@@ -12,6 +12,7 @@ from tqdm import tqdm
 from bridge.models.cond import BootstrapParticleFilter
 from utils import mean_rmse
 
+
 def RK4_step(f, t, x, h):
     k1 = h * f(t, x)
     k2 = h * f(t + 0.5 * h, x + 0.5 * k1)
@@ -64,15 +65,26 @@ def forward_dist_fn(data, args):
                 x = RK45_step(f, 0, x, delta)
             return Independent(Normal(x, x_std), 1)
 
-        G_fn = lambda x, t: Independent(Normal(x, y_std), 1)
+        class G_module:
+            def __init__(self):
+                self.G = torch.eye(3)
+                self.V = torch.eye(3) * y_std**2
+
+            def __call__(self, x, t):
+                return Independent(Normal(x, y_std), 1)
+
+        G_fn = G_module()
 
     elif data == 'type2':
         xdim = args.x_dim
         ydim = args.y_dim
         forcing = 8
-        dt = 0.1
+        dt = 0.4
         delta = 0.01
-        obs_idx = np.sort(np.random.choice(xdim, ydim, replace=False))
+        if xdim % ydim == 0:
+            obs_idx = np.arange(ydim) * (xdim // ydim)
+        else:
+            obs_idx = np.sort(np.random.choice(xdim, ydim, replace=False))
         G = torch.zeros((ydim, xdim))
         G[torch.arange(ydim), obs_idx] = 1
         x_std = args.data.x_std
@@ -80,15 +92,23 @@ def forward_dist_fn(data, args):
 
         def f(t, x):
             i = np.arange(xdim)
-            d = (x[..., (i + 1) % xdim] - x[..., i - 2]) * x[..., i - 1] - x[..., i] + forcing
+            d = (x[..., (i + 1) % xdim] - x[..., i - 2]) * x[..., i - 1] - x + forcing
             return d
 
         def F_fn(x, t):
             for _ in range(int(dt/delta)):
                 x = RK4_step(f, 0, x, delta)
-            return Independent(Normal(x, x_std), 1)
+            return Independent(Normal(x, x_std, validate_args=False), 1)
 
-        G_fn = lambda x, t: Independent(Normal(functional.linear(x, G), y_std), 1)
+        class G_module:
+            def __init__(self):
+                self.G = G
+                self.V = torch.eye(ydim) * y_std**2
+
+            def __call__(self, x, t):
+                return Independent(Normal(functional.linear(x, G), y_std), 1)
+
+        G_fn = G_module()
 
     return F_fn, G_fn
 
@@ -134,25 +154,30 @@ def lorenz_process(root, data_tag, args):
         x_0_mean = eval(args.data.x_0_mean)
         x_0_std = eval(args.data.x_0_std)
 
-        # BPF
-        gt_means = torch.zeros([0, xdim])
-        gt_stds = torch.zeros([0, xdim])
+        if data_tag == 'type1':
+            # BPF
+            gt_means = torch.zeros([0, xdim])
+            gt_stds = torch.zeros([0, xdim])
 
-        p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
-        F_fn, G_fn = forward_dist_fn(data_tag, args)
-        BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 100000)
+            p_0_dist = lambda: Independent(Normal(x_0_mean, x_0_std), 1)
+            F_fn, G_fn = forward_dist_fn(data_tag, args)
+            BPF = BootstrapParticleFilter(xdim, ydim, F_fn, G_fn, p_0_dist, 100000)
 
-        for t in tqdm(range(T)):
-            BPF.advance_timestep(y[t])
-            BPF.update(y[t])
+            for t in tqdm(range(T)):
+                BPF.advance_timestep(y[t])
+                BPF.update(y[t])
 
-            gt_mean, gt_cov = BPF.return_summary_stats()
-            gt_std = torch.diagonal(gt_cov).sqrt()
+                gt_mean, gt_cov = BPF.return_summary_stats()
+                gt_std = torch.diagonal(gt_cov).sqrt()
 
-            gt_means = torch.vstack([gt_means, gt_mean])
-            gt_stds = torch.vstack([gt_stds, gt_std])
+                gt_means = torch.vstack([gt_means, gt_mean])
+                gt_stds = torch.vstack([gt_stds, gt_std])
 
-        torch.save([gt_means, gt_stds], gt_filter_path)
+            torch.save([gt_means, gt_stds], gt_filter_path)
+        else:
+            gt_means = torch.zeros_like(x)
+            gt_stds = torch.zeros_like(x)
+
     print("Mean RMSE (BPF):", mean_rmse(x, gt_means).numpy())
 
     fig = plt.figure()

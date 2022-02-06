@@ -120,8 +120,8 @@ def get_models(args):
         deg = args.model.deg
         basis = args.model.basis
         num_steps = args.num_steps
-        net_f, net_b = DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, y_dimwise=args.model.y_dimwise, alphas=args.model.alphas), \
-                       DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, y_dimwise=args.model.y_dimwise, alphas=args.model.alphas)
+        net_f, net_b = DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, x_radius=args.model.x_radius, y_radius=args.model.y_radius, alphas=args.model.alphas), \
+                       DimwiseBasisRegressor(x_dim, y_dim, deg, basis, num_steps, x_radius=args.model.x_radius, y_radius=args.model.y_radius, alphas=args.model.alphas)
 
     # if model_tag == KRR_MODEL_COND:
     #     x_dim = args.x_dim

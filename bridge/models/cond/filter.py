@@ -61,6 +61,57 @@ class EnsembleKalmanFilter(nn.Module):
         return x.mean(-2), x.std(-2) * self.std_scale
 
 
+class EnsembleKalmanFilterSpinup(nn.Module):
+    def __init__(self, xdim, ydim, F_fn, G_fn, p_0_dist, ensemble_size):
+        super().__init__()
+        self.T = -1
+
+        self.xdim = xdim
+        self.ydim = ydim
+        self.ensemble_size = ensemble_size
+
+        self.F_fn = F_fn
+        self.G_fn = G_fn
+        self.p_0_dist = p_0_dist
+        self.x_Tm1 = None
+        self.x_T = None
+
+    def advance_timestep(self, y_T):
+        self.T += 1
+
+        if self.T == 0:
+            self.x_T_pred = self.p_0_dist().sample((self.ensemble_size,))
+        else:
+            self.x_Tm1 = self.x_T.clone().detach()
+            self.x_T_pred = self.F_fn(self.x_Tm1, self.T-1).sample()
+
+        self.y_T_pred = self.G_fn(self.x_T_pred, self.T).sample()
+        # cov_x_y = sample_cov(self.x_T_pred, self.y_T_pred)
+        # cov_y = sample_cov(self.y_T_pred)
+        # self.K = cov_x_y @ torch.linalg.inv(cov_y)
+        cov_x = sample_cov(self.x_T_pred)
+        self.K = cov_x @ self.G_fn.G.t() @ torch.linalg.inv(self.G_fn.G @ cov_x @ self.G_fn.G.t() + self.G_fn.V)
+
+    def update(self, y_T):
+        self.x_T = self.x_T_pred + (y_T - self.y_T_pred) @ self.K.t()
+
+        # if self.T > 0:
+        #     cov_x_Tm1_y = sample_cov(self.x_Tm1, self.y_T_pred)
+        #     J = cov_x_Tm1_y @ torch.linalg.inv(cov_y)
+        #     self.x_Tm1 = self.x_Tm1 + (y_T - self.y_T_pred) @ J.t()
+
+    def return_summary_stats(self, t=None):
+        if t is None:
+            t = self.T
+        if t == self.T:
+            x_t = self.x_T
+        # elif t == self.T - 1:
+        #     x_t = self.x_Tm1
+        x_t_mean = x_t.mean(0)
+        x_t_cov = sample_cov(x_t)
+        return x_t_mean, x_t_cov
+
+
 class BootstrapParticleFilter(nn.Module):
     def __init__(self, xdim, ydim, F_fn, G_fn, p_0_dist, num_particles):
         """

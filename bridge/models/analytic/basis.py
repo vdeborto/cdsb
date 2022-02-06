@@ -5,7 +5,7 @@ from sklearn.linear_model import LinearRegression, RidgeCV
 
 
 class DimwiseBasisRegressor(nn.Module):
-    def __init__(self, x_dim, y_dim, deg, basis, num_steps, y_dimwise=False, alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]):
+    def __init__(self, x_dim, y_dim, deg, basis, num_steps, x_radius=None, y_radius=None, alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]):
         super().__init__()
         self.x_dim = x_dim
         self.y_dim = y_dim
@@ -15,7 +15,8 @@ class DimwiseBasisRegressor(nn.Module):
         self.models = [RidgeCV(alphas=alphas) for _ in range(self.num_steps*self.x_dim)]
 
         self.basis = basis
-        self.y_dimwise = y_dimwise
+        self.x_radius = x_radius
+        self.y_radius = y_radius
 
         if self.basis == 'rbf':
             self.basis_locs = [None for _ in range(self.num_steps*self.x_dim)]
@@ -47,6 +48,21 @@ class DimwiseBasisRegressor(nn.Module):
 
         return X
 
+    def get_x_radius_index(self, d):
+        if self.x_radius is None:
+            return np.arange(self.x_dim)
+        else:
+            idx = np.arange(d - self.x_radius + 1, d + self.x_radius)
+            return idx % self.x_dim
+
+    def get_y_radius_index(self, d):
+        if self.y_radius is None:
+            return np.arange(self.y_dim)
+        else:
+            assert self.x_dim == self.y_dim
+            idx = np.arange(d - self.y_radius + 1, d + self.y_radius)
+            return idx % self.y_dim
+
     def forward(self, x, y, t):
         k = t[0, 0]
         assert torch.all(t == k)
@@ -54,13 +70,11 @@ class DimwiseBasisRegressor(nn.Module):
 
         for d in range(self.x_dim):
             i = k*self.x_dim+d
-            x_input = x
 
-            if self.y_dimwise:
-                assert self.x_dim == self.y_dim
-                y_input = y[:, d].unsqueeze(1)
-            else:
-                y_input = y
+            x_input_index = self.get_x_radius_index(d)
+            y_input_index = self.get_y_radius_index(d)
+            x_input = x[:, x_input_index]
+            y_input = y[:, y_input_index]
 
             X = torch.cat([x_input, y_input], dim=-1)
             X = self.compute_basis(X, i)
@@ -77,13 +91,11 @@ class DimwiseBasisRegressor(nn.Module):
 
             for d in range(self.x_dim):
                 i = k*self.x_dim+d
-                x_input = x[t_idx]
 
-                if self.y_dimwise:
-                    assert self.x_dim == self.y_dim
-                    y_input = y[t_idx, d].unsqueeze(1)
-                else:
-                    y_input = y[t_idx]
+                x_input_index = self.get_x_radius_index(d)
+                y_input_index = self.get_y_radius_index(d)
+                x_input = x[t_idx, x_input_index]
+                y_input = y[t_idx, y_input_index]
 
                 X = torch.cat([x_input, y_input], dim=-1)
                 self.register_basis(X, i)

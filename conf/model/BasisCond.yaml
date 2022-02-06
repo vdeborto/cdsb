@@ -7,5 +7,6 @@ model:
     basis: rbf
     x_radius: null
     y_radius: null
+    use_ridgecv: True
     alphas: [1e-6, 1e-3, 1e-1, 1.]
     use_fp16: False

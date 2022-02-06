@@ -5,14 +5,17 @@ from sklearn.linear_model import LinearRegression, RidgeCV
 
 
 class DimwiseBasisRegressor(nn.Module):
-    def __init__(self, x_dim, y_dim, deg, basis, num_steps, x_radius=None, y_radius=None, alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]):
+    def __init__(self, x_dim, y_dim, deg, basis, num_steps, x_radius=None, y_radius=None,
+                 use_ridgecv=True, alphas=[1e-6, 1e-4, 1e-2, 1e-1, 1.]):
         super().__init__()
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.num_steps = num_steps
         self.deg = deg
-        # self.models = [LinearRegression() for _ in range(self.num_steps*self.x_dim)]
-        self.models = [RidgeCV(alphas=alphas) for _ in range(self.num_steps*self.x_dim)]
+        if use_ridgecv:
+            self.models = [RidgeCV(alphas=alphas) for _ in range(self.num_steps*self.x_dim)]
+        else:
+            self.models = [LinearRegression() for _ in range(self.num_steps*self.x_dim)]
 
         self.basis = basis
         self.x_radius = x_radius
@@ -94,8 +97,8 @@ class DimwiseBasisRegressor(nn.Module):
 
                 x_input_index = self.get_x_radius_index(d)
                 y_input_index = self.get_y_radius_index(d)
-                x_input = x[t_idx, x_input_index]
-                y_input = y[t_idx, y_input_index]
+                x_input = x[t_idx][:, x_input_index]
+                y_input = y[t_idx][:, y_input_index]
 
                 X = torch.cat([x_input, y_input], dim=-1)
                 self.register_basis(X, i)

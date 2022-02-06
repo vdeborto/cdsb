@@ -62,6 +62,7 @@ def main(args):
                     print("Mean filter RMSE (spinup):", np.mean(filter_rmses_enkf))
 
                     EnKF.x_T = EnKF_spinup.x_T
+                    EnKF.T = t
             else:
                 EnKF.advance_timestep(y[t])
                 EnKF.update(y[t])
@@ -161,6 +162,7 @@ def main(args):
                     print("Mean filter RMSE (spinup):", np.mean(filter_rmses))
 
                     EnKF.x_T = EnKF_spinup.x_T
+                    EnKF.T = t
                     x_ens = EnKF.x_T
 
             else:

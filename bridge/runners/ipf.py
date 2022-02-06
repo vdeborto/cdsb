@@ -1,5 +1,6 @@
-import torch
 import os, sys, warnings
+from collections import OrderedDict
+import torch
 import torch.nn.functional as F
 import numpy as np
 from ..langevin import Langevin
@@ -184,9 +185,26 @@ class IPFBase:
 
         if self.first_pass and self.args.checkpoint_run:
             if self.args.checkpoint_f is not None:
-                net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f)))
+                try:
+                    net_f.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f)))
+                except:
+                    state_dict = torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_f))
+                    new_state_dict = OrderedDict()
+                    for k, v in state_dict.items():
+                        name = k.replace("module.", "")  # remove "module."
+                        new_state_dict[name] = v
+                    net_f.load_state_dict(new_state_dict)
+
             if self.args.checkpoint_b is not None:
-                net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_b)))
+                try:
+                    net_b.load_state_dict(torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_b)))
+                except:
+                    state_dict = torch.load(hydra.utils.to_absolute_path(self.args.checkpoint_b))
+                    new_state_dict = OrderedDict()
+                    for k, v in state_dict.items():
+                        name = k.replace("module.", "")  # remove "module."
+                        new_state_dict[name] = v
+                    net_b.load_state_dict(new_state_dict)
 
         if forward_or_backward is None:
             net_f = net_f.to(self.device)
@@ -487,7 +505,7 @@ class IPFSequential(IPFBase):
             if self.accelerator.is_main_process:
                 name_net = 'net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
-                torch.save(self.net[fb].state_dict(), name_net_ckpt)
+                torch.save(self.accelerator.unwrap_model(self.net[fb]).state_dict(), name_net_ckpt)
                 name_opt = 'optimizer' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_opt_ckpt = os.path.join(self.ckpt_dir, name_opt)
                 torch.save(self.optimizer[fb].optimizer.state_dict(), name_opt_ckpt)

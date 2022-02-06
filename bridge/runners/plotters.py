@@ -708,10 +708,10 @@ class OneDCondPlotter(Plotter):
         npts = 250
         if data == 'type1':
             xlim = [-1,3]
-            colors = ['red', 'green', 'blue']
+            colors = ['red', 'lime', 'blue']
         elif data == 'type2':
             xlim = [-1.3,1.3]
-            colors = ['red', 'green', 'blue']
+            colors = ['red', 'lime', 'blue']
         elif data == 'type3':
             xlim = [-2.2,2.2]
             colors = ['red', 'blue']
@@ -755,9 +755,9 @@ class OneDCondPlotter(Plotter):
 
                     x_cond = x_start_tot_cond[j][k, :, 0]
 
-                    plt.plot(x_lin, zs_lin[j], color=colors[j])
-                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.7,
-                             edgecolor='black', linewidth=1)
+                    plt.plot(x_lin, zs_lin[j], color=colors[j], lw=1)
+                    plt.hist(x_cond, bins=50, range=(xlim[0], xlim[1]), density=True, color=colors[j], alpha=0.5,
+                             edgecolor='black', lw=1)
 
                 filename = plot_name + '_' + str(k) + '.png'
                 filename = os.path.join(im_dir, filename)

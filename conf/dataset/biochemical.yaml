@@ -17,12 +17,19 @@ transfer: False
 Dataset_transfer: 2d
 data_transfer: circle
 cond_final: False
+cond_final_model:
+  MODEL: BasicRegress
+  mean_scale: 1.
+  std_scale: 1.
+  adaptive_std: True
+  num_iter: ${num_iter}
+  checkpoint: null
 
 
 adaptive_mean: False
 final_adaptive: False
-mean_final: torch.tensor([0.])
-var_final: 1.*torch.tensor([1.])
+mean_final: torch.tensor([0., 0.])
+var_final: 1.*torch.tensor([1., 1.])
 
 
 # device
@@ -31,7 +38,7 @@ num_workers: 0
 pin_memory: False
 
 # training
-use_prev_net: False
+use_prev_net: True
 mean_match: False
 ema: False
 ema_rate: 0.999

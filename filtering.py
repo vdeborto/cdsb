@@ -30,6 +30,8 @@ def main(args):
     default_dtype = torch.get_default_dtype()
     x, y, gt_means, gt_stds = x.to(default_dtype), y.to(default_dtype), gt_means.to(default_dtype), gt_stds.to(default_dtype)
     T, xdim, ydim = x.shape[0], x.shape[1], y.shape[1]
+    assert xdim == args.xdim and ydim == args.ydim
+
     T_spinup = T // 2    
 
     x_0_mean = eval(args.data.x_0_mean)

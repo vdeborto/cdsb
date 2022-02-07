@@ -136,6 +136,23 @@ def get_models(args):
     return net_f, net_b
 
 
+def get_cond_model(args):
+    model_tag = getattr(args, MODEL)
+
+    if model_tag == BASIC_MODEL_COND:
+        x_dim = args.x_dim
+        y_dim = args.y_dim
+
+        kwargs = {
+            "encoder_layers": args.model.encoder_layers,
+            "temb_dim": args.model.temb_dim,
+            "decoder_layers": args.model.decoder_layers
+        }
+        net = BasicNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
+
+    return net
+
+
 def get_final_cond_model(args, init_ds):
     assert args.cond_final
 
@@ -152,8 +169,12 @@ def get_final_cond_model(args, init_ds):
         final_cond_model = BasicCondGaussian(mean_scale, std)
 
     elif model_tag == 'BasicRegress':
-        mean_model, _ = get_models(args)
-        mean_model.load_state_dict(args.cond_final_model.checkpoint)
+        mean_model = get_cond_model(args)
+        if args.cond_final_model.checkpoint is None:
+            import regression
+            mean_model = regression.train(args, final_cond_model=mean_model)
+        else:
+            mean_model.load_state_dict(torch.load(hydra.utils.to_absolute_path(args.cond_final_model.checkpoint)))
         mean_model = mean_model.eval()
         mean_scale = args.cond_final_model.mean_scale
         if args.cond_final_model.adaptive_std:

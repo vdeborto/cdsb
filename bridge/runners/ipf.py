@@ -20,7 +20,6 @@ from bridge.runners.accelerator import Accelerator
 class IPFBase:
     def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None,
                  valid_ds=None, test_ds=None):
-        super().__init__()
         if accelerator is None:
             self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu',
                                            fp16=args.model.use_fp16, split_batches=True)
@@ -351,13 +350,8 @@ class IPFBase:
 
     def train(self):
         # INITIAL FORWARD PASS
-        if not self.args.nosave and not self.args.checkpoint_run:
-            with torch.no_grad():
-                self.set_seed(seed=0 + self.accelerator.process_index)
-                test_metrics = self.plotter(None, 0, 0, 'f')
-
-                if self.accelerator.is_main_process:
-                    self.save_logger.log_metrics(test_metrics, step=0)
+        if not self.args.checkpoint_run:
+            self.plot_and_test_step(0, 0, 'f')
 
         for n in range(self.checkpoint_it, self.n_ipf + 1):
 
@@ -473,6 +467,26 @@ class IPFBase:
             return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
         return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
 
+    def plot_and_test_step(self, i, n, fb):
+        if not self.args.nosave:
+            if n == 0:
+                assert i == 0 and fb == "f"
+                sample_net = None
+                step = 0
+
+            else:
+                sample_net = self.get_sample_net(fb)
+                sample_net = sample_net.to(self.device)
+                sample_net.eval()
+                step = i + self.num_iter * (n - 1)
+
+            with torch.no_grad():
+                self.set_seed(seed=0 + self.accelerator.process_index)
+                test_metrics = self.plotter(sample_net, i, n, fb)
+
+                if self.accelerator.is_main_process:
+                    self.save_logger.log_metrics(test_metrics, step=step)
+
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
         random.seed(seed)
@@ -524,16 +538,7 @@ class IPFSequential(IPFBase):
                     #     import wandb
                     #     wandb.save(name_net_ckpt)
 
-            if not self.args.nosave:
-                sample_net = sample_net.to(self.device)
-                sample_net.eval()
-
-                with torch.no_grad():
-                    self.set_seed(seed=0 + self.accelerator.process_index)
-                    test_metrics = self.plotter(sample_net, i, n, fb)
-
-                    if self.accelerator.is_main_process:
-                        self.save_logger.log_metrics(test_metrics, step=i + self.num_iter * (n - 1))
+            self.plot_and_test_step(i, n, fb)
 
     def ipf_step(self, forward_or_backward, n):
         new_dl = self.new_cacheloader(forward_or_backward, n)
@@ -607,6 +612,12 @@ class IPFSequential(IPFBase):
 
 
 class IPFAnalytic(IPFBase):
+    def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None,
+                 valid_ds=None, test_ds=None):
+        super().__init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator, final_cond_model=final_cond_model,
+                         valid_ds=valid_ds, test_ds=test_ds)
+        self.num_iter = 1
+
     def new_cacheloader(self, forward_or_backward, n):
         sample_direction = 'f' if forward_or_backward == 'b' else 'b'
         sample_net = self.net[sample_direction]
@@ -648,12 +659,6 @@ class IPFAnalytic(IPFBase):
         else:
             self.net[forward_or_backward].fit(x, y, out, eval_steps)
 
-        if not self.args.nosave:
-            with torch.no_grad():
-                self.set_seed(seed=0 + self.accelerator.process_index)
-                test_metrics = self.plotter(self.net[forward_or_backward], 1, n, forward_or_backward)
-
-                if self.accelerator.is_main_process:
-                    self.save_logger.log_metrics(test_metrics, step=0)
+        self.plot_and_test_step(1, n, forward_or_backward)
 
         self.first_pass = False

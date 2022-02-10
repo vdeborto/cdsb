@@ -29,7 +29,7 @@ def main(args):
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
-    ipf.save_step(ipf.num_iter, ipf.checkpoint_iter, "b")
+    ipf.plot_and_test_step(ipf.num_iter, ipf.checkpoint_iter, "b")
 
 
 if __name__ == '__main__':

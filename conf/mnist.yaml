@@ -36,9 +36,10 @@ checkpoint_run: False
 checkpoint_it: 1
 checkpoint_pass: b  # b or f (skip b ipf run)
 checkpoint_iter: 0
+checkpoint_dir: null
 sample_checkpoint_f: null
-sample_checkpoint_b: null
+sample_checkpoint_b: ${checkpoint_dir}/
 checkpoint_f: null
-checkpoint_b: null
+checkpoint_b: ${checkpoint_dir}/
 optimizer_checkpoint_f: null
-optimizer_checkpoint_b: null
+optimizer_checkpoint_b: ${checkpoint_dir}/

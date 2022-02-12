@@ -35,13 +35,13 @@ langevin_scale: 2*torch.sqrt(gamma)
 
 # checkpoint
 checkpoint_run: True
-checkpoint_it: 86
+checkpoint_it: 1
 checkpoint_pass: b  # b or f (skip b ipf run)
-checkpoint_iter: 20000
-checkpoint_dir: experiments/biochemical_type1/2022-02-11/cfg-n_ipf=100/15-05-02/0/
-sample_checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/sample_net_f_85_20000.ckpt
-sample_checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/sample_net_b_86_20000.ckpt
-checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/net_f_85_20000.ckpt
-checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/net_b_86_20000.ckpt
-optimizer_checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/optimizer_f_85_20000.ckpt
-optimizer_checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/optimizer_b_86_20000.ckpt
+checkpoint_iter: 0
+checkpoint_dir: null
+sample_checkpoint_f: null
+sample_checkpoint_b: ${checkpoint_dir}/
+checkpoint_f: null
+checkpoint_b: ${checkpoint_dir}/
+optimizer_checkpoint_f: null
+optimizer_checkpoint_b: ${checkpoint_dir}/

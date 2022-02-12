@@ -7,7 +7,7 @@ mem_gb: 8
 name: ${hydra.job.name}
 partition: ziz-large
 max_num_timeout: 0
-array_parallelism: 10
+array_parallelism: 30
 additional_parameters: {
   "wckey": "bigbayes_project",
   # "gres": "gpu:1",

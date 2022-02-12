@@ -11,7 +11,7 @@ from bridge.runners.accelerator import Accelerator
 
 # SETTING PARAMETERS
 
-@hydra.main(config_path="./conf", config_name="test_mnist")
+@hydra.main(config_path="./conf", config_name="test_config")
 def main(args):
     accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu',
                               fp16=args.model.use_fp16, split_batches=True)

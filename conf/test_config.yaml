@@ -1,0 +1,47 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - launcher: slurm_cpu
+  - test_job
+  - dataset: 1d_cond #celeba, 2d, stackedmnist
+  - model: BasicCond #Basic, UNET
+  - override hydra/launcher: submitit_slurm
+
+name: ${Dataset}_${data.dataset}
+run: 0
+nosave: False
+
+# logging
+LOGGER: CSV  # CSV, Wandb, NONE
+CSV_log_dir: ./
+
+# training
+optimizer: Adam
+cache_cpu: True
+num_cache_batches: 1
+cache_refresh_stride: 1000
+test_batch_size: 10000
+plot_level: 1
+mean_match: True
+paths:
+  experiments_dir_name: experiments
+  data_dir_name: data
+
+symmetric_gamma: False
+var_final_gamma_scale: False
+double_gamma_scale: True
+langevin_scale: 2*torch.sqrt(gamma)
+
+# checkpoint
+checkpoint_run: True
+checkpoint_it: 86
+checkpoint_pass: b  # b or f (skip b ipf run)
+checkpoint_iter: 20000
+checkpoint_dir: experiments/biochemical_type1/2022-02-11/cfg-n_ipf=100/15-05-02/0/
+sample_checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/sample_net_f_85_20000.ckpt
+sample_checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/sample_net_b_86_20000.ckpt
+checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/net_f_85_20000.ckpt
+checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/net_b_86_20000.ckpt
+optimizer_checkpoint_f: ${checkpoint_dir}/checkpoints/version_0/optimizer_f_85_20000.ckpt
+optimizer_checkpoint_b: ${checkpoint_dir}/checkpoints/version_0/optimizer_b_86_20000.ckpt

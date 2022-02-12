@@ -38,6 +38,7 @@ num_workers: 0
 pin_memory: False
 
 # training
+cache_refresh_stride: 10000
 use_prev_net: True
 mean_match: False
 ema: False
@@ -45,7 +46,7 @@ ema_rate: 0.999
 grad_clipping: False
 grad_clip: 1.0
 npar: 50000
-batch_size: 2000
+batch_size: 100
 num_iter: 20000
 cache_npar: 20000
 n_ipf: 20

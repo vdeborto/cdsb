@@ -486,6 +486,7 @@ class IPFBase:
 
                 if self.accelerator.is_main_process:
                     self.save_logger.log_metrics(test_metrics, step=step)
+        return test_metrics
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)

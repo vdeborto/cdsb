@@ -35,8 +35,8 @@ pin_memory: True
 # logging
 log_stride: 10
 gif_stride: 10000
-plot_npar: 10000
-test_npar: 100
+plot_npar: 100
+test_npar: 10000
 
 # training
 cache_refresh_stride: 500

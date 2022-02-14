@@ -13,7 +13,7 @@ run: 0
 nosave: False
 
 # logging
-LOGGER: Wandb  # CSV, Wandb, NONE
+LOGGER: CSV  # CSV, Wandb, NONE
 CSV_log_dir: ./
 
 # training

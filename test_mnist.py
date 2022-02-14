@@ -26,6 +26,7 @@ def main(args):
 
     ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
                         final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
+    ipf.checkpoint_iter = args.checkpoint_iter
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))

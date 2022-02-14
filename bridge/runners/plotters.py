@@ -42,19 +42,20 @@ class Plotter(object):
             os.makedirs(im_dir, exist_ok=True)
             os.makedirs(gif_dir, exist_ok=True)
 
-        while not os.path.isdir(im_dir):
-            time.sleep(3)
-        ipf.accelerator.wait_for_everyone()
+            existing_versions = []
+            for d in os.listdir(im_dir):
+                if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
+                    existing_versions.append(int(d.split("_")[1]))
 
-        existing_versions = []
-        for d in os.listdir(im_dir):
-            if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
-                existing_versions.append(int(d.split("_")[1]))
-
-        if len(existing_versions) == 0:
-            version = 0
+            if len(existing_versions) == 0:
+                version = torch.tensor([0])
+            else:
+                version = torch.tensor([max(existing_versions) + 1])
         else:
-            version = max(existing_versions) + 1
+            version = torch.tensor([0])
+
+        version = ipf.accelerator.gather(version)
+        version = torch.max(version).item()
 
         self.im_dir = os.path.join(im_dir, f"version_{version}")
         self.gif_dir = os.path.join(gif_dir, f"version_{version}")

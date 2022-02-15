@@ -48,11 +48,11 @@ class Plotter(object):
                     existing_versions.append(int(d.split("_")[1]))
 
             if len(existing_versions) == 0:
-                version = torch.tensor([0])
+                version = torch.tensor([0], device=ipf.device)
             else:
-                version = torch.tensor([max(existing_versions) + 1])
+                version = torch.tensor([max(existing_versions) + 1], device=ipf.device)
         else:
-            version = torch.tensor([0])
+            version = torch.tensor([0], device=ipf.device)
 
         version = ipf.accelerator.gather(version)
         version = torch.max(version).item()

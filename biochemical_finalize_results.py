@@ -82,7 +82,7 @@ x1_skews_mean = np.mean(x1_skews, axis=0)
 x0_kurts_mean = np.mean(x0_kurts, axis=0)
 x1_kurts_mean = np.mean(x1_kurts, axis=0)
 
-np.savez("statistics_mean.npz", x0_means_mean, x1_means_mean, x0_vars_mean, x1_vars_mean,
+np.savez(os.path.join(base_dir, "statistics_mean.npz"), x0_means_mean, x1_means_mean, x0_vars_mean, x1_vars_mean,
          x0_skews_mean, x1_skews_mean, x0_kurts_mean, x1_kurts_mean)
 
 if not cond_final:
@@ -95,7 +95,7 @@ if not cond_final:
     x0_kurts_fwdbwd_mean = np.mean(x0_kurts_fwdbwd, axis=0)
     x1_kurts_fwdbwd_mean = np.mean(x1_kurts_fwdbwd, axis=0)
 
-    np.savez("statistics_mean_fwdbwd.npz", x0_means_fwdbwd_mean, x1_means_fwdbwd_mean, x0_vars_fwdbwd_mean, x1_vars_fwdbwd_mean,
+    np.savez(os.path.join(base_dir, "statistics_mean_fwdbwd.npz"), x0_means_fwdbwd_mean, x1_means_fwdbwd_mean, x0_vars_fwdbwd_mean, x1_vars_fwdbwd_mean,
              x0_skews_fwdbwd_mean, x1_skews_fwdbwd_mean, x0_kurts_fwdbwd_mean, x1_kurts_fwdbwd_mean)
 
 # print(x0_means_mean[-1], np.std(x0_means, axis=0)[-1])

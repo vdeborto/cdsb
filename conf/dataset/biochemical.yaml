@@ -22,7 +22,6 @@ cond_final_model:
   mean_scale: 1.
   std_scale: 1.
   adaptive_std: True
-  num_iter: ${num_iter}
   checkpoint: null
 
 

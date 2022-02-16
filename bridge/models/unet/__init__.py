@@ -1,2 +1,2 @@
-from .unet import UNetModel, SuperResModel
+from .unet import UNetModel, SuperResModel, BasicUNetModel
 

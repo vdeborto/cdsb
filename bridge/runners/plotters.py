@@ -202,13 +202,13 @@ class Plotter(object):
                         gather_var_final = self.ipf.accelerator.gather(var_final)
 
                     if self.ipf.accelerator.is_main_process:
-                            all_batch_x.append(gather_batch_x.cpu())
-                            all_batch_y.append(gather_batch_y.cpu())
-                            all_x_tot.append(gather_x_tot.cpu())
-                            all_init_batch_x.append(gather_init_batch_x.cpu())
-                            if self.args.cond_final:
-                                all_mean_final.append(gather_mean_final.cpu())
-                                all_var_final.append(gather_var_final.cpu())
+                        all_batch_x.append(gather_batch_x.cpu())
+                        all_batch_y.append(gather_batch_y.cpu())
+                        all_x_tot.append(gather_x_tot.cpu())
+                        all_init_batch_x.append(gather_init_batch_x.cpu())
+                        if self.args.cond_final:
+                            all_mean_final.append(gather_mean_final.cpu())
+                            all_var_final.append(gather_var_final.cpu())
 
                 iters = iters + 1
 
@@ -424,7 +424,7 @@ class ImPlotter(Plotter):
 
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
                             mean_final=None, var_final=None):
-        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, freq=freq,
+        super().plot_sequence_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, freq=freq, dl_name=dl_name,
                                     mean_final=mean_final, var_final=var_final)
         if freq is None:
             freq = self.num_steps // min(self.num_steps, 50)
@@ -781,7 +781,8 @@ class OneDCondPlotter(Plotter):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)
 
     def test_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', mean_final=None, var_final=None):
-        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, mean_final=mean_final, var_final=var_final)
+        out = super().test_joint(x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name=dl_name,
+                                 mean_final=mean_final, var_final=var_final)
 
         if fb == 'b':
             y_start = y_start.detach().cpu().numpy()
@@ -1075,3 +1076,292 @@ class BiochemicalPlotter(Plotter):
             out["cond/x1_kurt_" + tag] = x_last_cond_kurtosis[1]
 
         return out
+
+
+class BasicPlotter(object):
+    def __init__(self, ipf, args, im_dir='./im', gif_dir='./gif'):
+        self.ipf = ipf
+        self.args = args
+        self.plot_level = self.args.plot_level
+
+        self.dataset = self.args.data.dataset
+
+        if self.ipf.accelerator.is_main_process:
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
+
+            existing_versions = []
+            for d in os.listdir(im_dir):
+                if os.path.isdir(os.path.join(im_dir, d)) and d.startswith("version_"):
+                    existing_versions.append(int(d.split("_")[1]))
+
+            if len(existing_versions) == 0:
+                version = torch.tensor([0], device=ipf.device)
+            else:
+                version = torch.tensor([max(existing_versions) + 1], device=ipf.device)
+        else:
+            version = torch.tensor([0], device=ipf.device)
+
+        version = ipf.accelerator.gather(version)
+        version = torch.max(version).item()
+
+        self.im_dir = os.path.join(im_dir, f"version_{version}")
+        self.gif_dir = os.path.join(gif_dir, f"version_{version}")
+
+        if self.ipf.accelerator.is_main_process:
+            os.makedirs(self.im_dir, exist_ok=True)
+            os.makedirs(self.gif_dir, exist_ok=True)
+
+        self.metrics_dict = {}
+
+    def __call__(self, sample_net, i):
+        out = {}
+        self.step = i
+
+        for dl_name, dl in self.ipf.save_dls_dict.items():
+            y_start, x_last, x_init, time_joint, metric_results = \
+                self.generate_joint(dl, sample_net, i, dl_name=dl_name)
+            out.update(metric_results)
+            out[dl_name + "/" + 'batch_sample_time'] = np.mean(time_joint)
+
+            if self.ipf.accelerator.is_main_process:
+                self.plot_joint(y_start[:self.args.plot_npar], x_last[:self.args.plot_npar], x_init[:self.args.plot_npar],
+                                self.dataset, i, dl_name=dl_name)
+                out.update(self.test_joint(y_start[:self.args.plot_npar], x_last[:self.args.plot_npar], x_init[:self.args.plot_npar],
+                                           self.dataset, i, dl_name=dl_name))
+
+        if self.ipf.y_cond is not None:
+            x_last_cond = []
+            time_cond = []
+            save_init_dl = repeater(self.ipf.save_init_dl)
+            for y_c in self.ipf.y_cond:
+                x_last_c, time_c = self.generate_cond(y_c, save_init_dl, sample_net, i)
+                if self.ipf.accelerator.is_main_process:
+                    x_last_cond.append(x_last_c)
+                    time_cond.append(time_c)
+
+            if self.ipf.accelerator.is_main_process:
+                x_last_cond = torch.stack(x_last_cond, dim=0)
+                self.plot_cond(self.ipf.y_cond, x_last_cond,
+                               self.dataset, i, x_init_cond=self.ipf.x_cond_true)
+                out.update(self.test_cond(self.ipf.y_cond, x_last_cond,
+                                          self.dataset, i, x_init_cond=self.ipf.x_cond_true))
+                out["cond/batch_sample_time"] = np.mean(time_cond)
+
+        torch.cuda.empty_cache()
+        return out
+
+    def generate_joint(self, dl, sample_net, i, dl_name='train'):
+        iter_dl = iter(dl)
+        for metric in self.metrics_dict.values():
+            metric.reset()
+
+        all_batch_y = []
+        all_x_last = []
+        all_init_batch_x = []
+        times = []
+        metric_results = {}
+
+        iters = 0
+        while iters * self.ipf.test_batch_size < self.ipf.save_npar:
+            try:
+                start = time.time()
+
+                init_batch_x, batch_y = next(iter_dl)
+                x_last = sample_net(batch_y)
+
+                stop = time.time()
+                times.append(stop - start)
+
+                self.plot_and_record_batch_joint(x_last, init_batch_x, iters, i, dl_name=dl_name)
+
+                if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
+                    gather_batch_y = self.ipf.accelerator.gather(batch_y)
+                    gather_x_last = self.ipf.accelerator.gather(x_last)
+                    gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
+
+                    if self.ipf.accelerator.is_main_process:
+                        all_batch_y.append(gather_batch_y.cpu())
+                        all_x_last.append(gather_x_last.cpu())
+                        all_init_batch_x.append(gather_init_batch_x.cpu())
+
+                iters = iters + 1
+
+            except StopIteration:
+                break
+
+        if self.ipf.accelerator.is_main_process:
+            all_batch_y = torch.cat(all_batch_y, dim=0)
+            all_x_last = torch.cat(all_x_last, dim=0)
+            all_init_batch_x = torch.cat(all_init_batch_x, dim=0)
+
+        for metric_name, metric in self.metrics_dict.items():
+            metric_result = metric.compute()
+            if self.ipf.accelerator.is_main_process:
+                metric_results[dl_name + "/" + metric_name] = metric_result
+            metric.reset()
+
+        return all_batch_y, all_x_last, all_init_batch_x, times, metric_results
+
+    def generate_cond(self, y_c, dl, sample_net, i):
+        if y_c is not None:
+            start = time.time()
+
+            y_c = y_c.expand(1, *self.ipf.shape_y).clone().to(self.ipf.device)
+            x_last_c = sample_net(y_c).squeeze(0).cpu()
+
+            stop = time.time()
+            return x_last_c, stop-start
+
+    def plot_joint(self, y_start, x_last, x_init, data, i, dl_name='train'):
+        pass
+
+    def plot_cond(self, y_cond, x_last_cond, data, i, x_init_cond=None):
+        pass
+
+    def test_joint(self, y_start, x_last, x_init, data, i, dl_name='train'):
+        return {}
+
+    def test_cond(self, y_cond, x_last_cond, data, i, x_init_cond=None):
+        return {}
+
+    def plot_and_record_batch_joint(self, x_last, x_init, iters, i, dl_name='train'):
+        pass
+
+
+class BasicImPlotter(BasicPlotter):
+    def __init__(self, ipf, args, im_dir='./im', gif_dir='./gif'):
+        super().__init__(ipf, args, im_dir=im_dir, gif_dir=gif_dir)
+        self.num_plots_grid = 100
+
+        self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
+                             "ssim": SSIM(data_range=255.).to(self.ipf.device),
+                             "fid": FID().to(self.ipf.device)}
+
+    def plot_joint(self, y_start, x_last, x_init, data, i, dl_name='train'):
+        super().plot_joint(y_start, x_last, x_init, data, i, dl_name=dl_name)
+
+        if self.plot_level >= 1:
+            x_last_grid = x_last[:self.num_plots_grid]
+            name = str(i) + '_reg_' + str(0)
+            im_dir = os.path.join(self.im_dir, name, dl_name)
+            gif_dir = os.path.join(self.gif_dir, dl_name)
+
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
+
+            # plot_level 1
+            uint8_x_init = to_uint8_tensor(x_init[:self.num_plots_grid])
+
+            def save_image_with_metrics(batch_x, filename, **kwargs):
+                plt.clf()
+
+                uint8_batch_x = to_uint8_tensor(batch_x)
+
+                psnr = PSNR(data_range=255.)
+                psnr_result = psnr(uint8_batch_x, uint8_x_init).item()
+                psnr.reset()
+
+                ssim = SSIM(data_range=255.)
+                ssim_result = ssim(uint8_batch_x, uint8_x_init).item()
+                ssim.reset()
+
+                uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
+                plt.imshow(uint8_batch_x_grid)
+
+                plt.title('Regression: \n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
+                    round(ssim_result, 2)))
+                plt.axis('off')
+                plt.savefig(filename)
+                plt.close()
+
+            filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
+            save_image_with_metrics(x_last_grid, filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_last", [filename_grid_png], step=self.step)
+
+            filename_grid_png = os.path.join(im_dir, 'im_grid_data_x.png')
+            save_image_with_metrics(x_init[:self.num_plots_grid], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_x", [filename_grid_png], step=self.step)
+
+            filename_grid_png = os.path.join(im_dir, 'im_grid_data_y.png')
+            save_image_with_metrics(y_start[:self.num_plots_grid], filename_grid_png, nrow=10)
+            self.ipf.save_logger.log_image(dl_name + "/im_grid_data_y", [filename_grid_png], step=self.step)
+
+
+    def plot_cond(self, y_cond, x_last_cond, data, i, x_init_cond=None):
+        if self.plot_level >= 1:
+            y_cond = y_cond.cpu()
+            x_init_cond = x_init_cond.cpu() if x_init_cond is not None else None
+
+            iter_name = str(i) + '_reg_' + str(0)
+            im_dir = os.path.join(self.im_dir, iter_name, "cond")
+            gif_dir = os.path.join(self.gif_dir, "cond")
+
+            os.makedirs(im_dir, exist_ok=True)
+            os.makedirs(gif_dir, exist_ok=True)
+
+            # plot_level 1
+            if x_init_cond is not None:
+                uint8_x_init = to_uint8_tensor(x_init_cond[:self.num_plots_grid])
+
+            def save_image_with_metrics(batch_x, filename):
+                # batch_x shape (y_cond, c, h, w)
+                plt.clf()
+                ncol = 3 if x_init_cond is not None else 2
+                plt.figure(figsize=(ncol, batch_x.shape[0]))
+
+                uint8_batch_x = to_uint8_tensor(batch_x)
+                plt_idx = 1
+
+                def subplot_imshow(tensor, plt_idx):
+                    ax = plt.subplot(len(y_cond), ncol, plt_idx)
+                    ax.axis('off')
+                    ax.imshow(tensor.permute(1, 2, 0))
+
+                for j in range(len(y_cond)):
+                    if x_init_cond is not None:
+                        subplot_imshow(uint8_x_init[j].expand(3, -1, -1), plt_idx)
+                        plt_idx += 1
+                    subplot_imshow(to_uint8_tensor(y_cond[j]).expand(3, -1, -1), plt_idx)
+                    plt_idx += 1
+                    subplot_imshow(uint8_batch_x[j].expand(3, -1, -1), plt_idx)
+                    plt_idx += 1
+
+                psnr = PSNR(data_range=255.)
+                psnr_result = psnr(uint8_batch_x, uint8_x_init).item()
+                psnr.reset()
+
+                ssim = SSIM(data_range=255.)
+                ssim_result = ssim(uint8_batch_x, uint8_x_init).item()
+                ssim.reset()
+
+                plt.suptitle('Regression \n psnr: ' + str(round(psnr_result, 2)) +
+                             '\n ssim: ' + str(round(ssim_result, 2)))
+                plt.savefig(filename)
+                plt.close()
+
+            plot_name = 'cond_im_grid_'
+            filename_grid_png = os.path.join(im_dir, plot_name + '_last.png')
+            save_image_with_metrics(x_last_cond, filename_grid_png)
+            self.ipf.save_logger.log_image(f"cond/{plot_name}_last", [filename_grid_png], step=self.step)
+
+
+    def plot_and_record_batch_joint(self, x_last, x_init, iters, i, dl_name='train'):
+        uint8_x_init = to_uint8_tensor(x_init)
+        uint8_x_last = to_uint8_tensor(x_last)
+
+        for metric in self.metrics_dict.values():
+            metric.update(uint8_x_last, uint8_x_init)
+
+        if self.plot_level >= 3:
+            name = str(i) + '_reg_' + str(0)
+            im_dir = os.path.join(self.im_dir, name, dl_name)
+            im_dir = os.path.join(im_dir, "im/")
+            os.makedirs(im_dir, exist_ok=True)
+
+            for k in range(x_last.shape[0]):
+                plt.clf()
+                file_idx = iters * self.ipf.test_batch_size + self.ipf.accelerator.process_index * self.ipf.test_batch_size // self.ipf.accelerator.num_processes + k
+                filename_png = os.path.join(im_dir, '{:05}.png'.format(file_idx))
+                assert not os.path.isfile(filename_png)
+                save_image(x_last[k], filename_png)

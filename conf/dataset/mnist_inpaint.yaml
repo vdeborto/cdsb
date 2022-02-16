@@ -14,10 +14,11 @@ transfer: False
 Dataset_transfer: mnist
 cond_final: False
 cond_final_model:
-  MODEL: BasicCond
+  MODEL: BasicRegress
   mean_scale: 1.
-  std_scale: 1.
+  std_scale: 1.1547
   adaptive_std: True
+  checkpoint: null
 
 
 adaptive_mean: False

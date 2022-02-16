@@ -10,7 +10,7 @@ from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
 from ..data.emnist import EMNIST
 from ..data.celeba import Cond_CelebA
-from .plotters import Plotter, OneDCondPlotter, OneDRevCondPlotter, FiveDCondPlotter, BiochemicalPlotter, ImPlotter
+from .plotters import *
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
 import os
@@ -35,6 +35,14 @@ def get_plotter(runner, args):
         return ImPlotter(runner, args)
     else:
         return Plotter(runner, args)
+
+
+def get_cond_plotter(runner, args):
+    dataset_tag = getattr(args, DATASET)
+    if dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA]:
+        return BasicImPlotter(runner, args)
+    else:
+        return BasicPlotter(runner, args)
 
 
 # Model
@@ -150,6 +158,43 @@ def get_cond_model(args):
         }
         net = BasicNetworkCond(x_dim=x_dim, y_dim=y_dim, **kwargs)
 
+    if model_tag == SUPERRES_UNET_MODEL:
+        image_size = args.data.image_size
+
+        if args.model.channel_mult is not None:
+            channel_mult = args.model.channel_mult
+        else:
+            if image_size == 256:
+                channel_mult = (1, 1, 2, 2, 4, 4)
+            elif image_size == 64:
+                channel_mult = (1, 2, 2, 2)
+            elif image_size == 32:
+                channel_mult = (1, 2, 2, 2)
+            elif image_size == 28:
+                channel_mult = (0.5, 1, 1)
+            else:
+                raise ValueError(f"unsupported image size: {image_size}")
+
+        attention_ds = []
+        for res in args.model.attention_resolutions.split(","):
+            if image_size % int(res) == 0:
+                attention_ds.append(image_size // int(res))
+
+        kwargs = {
+            "in_channels": args.data.channels,
+            "model_channels": args.model.num_channels,
+            "out_channels": args.data.channels,
+            "num_res_blocks": args.model.num_res_blocks,
+            "attention_resolutions": tuple(attention_ds),
+            "dropout": args.model.dropout,
+            "channel_mult": channel_mult,
+            "use_checkpoint": args.model.use_checkpoint,
+            "num_heads": args.model.num_heads,
+            "resblock_updown": args.model.resblock_updown
+        }
+
+        net = BasicUNetModel(**kwargs)
+
     return net
 
 
@@ -169,11 +214,11 @@ def get_final_cond_model(args, init_ds):
         final_cond_model = BasicCondGaussian(mean_scale, std)
 
     elif model_tag == 'BasicRegress':
-        mean_model = get_cond_model(args)
         if args.cond_final_model.checkpoint is None:
             import regression
-            mean_model = regression.train(args, final_cond_model=mean_model)
+            mean_model = regression.train(args)
         else:
+            mean_model = get_cond_model(args)
             mean_model.load_state_dict(torch.load(hydra.utils.to_absolute_path(args.cond_final_model.checkpoint)))
         mean_model = mean_model.eval()
         mean_scale = args.cond_final_model.mean_scale

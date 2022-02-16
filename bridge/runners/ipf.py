@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from ..langevin import Langevin
 from torch.utils.data import DataLoader
-from .config_getters import get_models, get_optimizer, get_plotter, get_logger
+from .config_getters import get_models, get_cond_model, get_optimizer, get_plotter, get_cond_plotter, get_logger
 import hydra
 from tqdm import tqdm
 from .ema import EMAHelper
@@ -486,7 +486,7 @@ class IPFBase:
 
                 if self.accelerator.is_main_process:
                     self.save_logger.log_metrics(test_metrics, step=step)
-        return test_metrics
+            return test_metrics
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
@@ -663,3 +663,232 @@ class IPFAnalytic(IPFBase):
         self.plot_and_test_step(1, n, forward_or_backward)
 
         self.first_pass = False
+
+
+class IPFRegression:
+    def __init__(self, init_ds, args, accelerator=None, valid_ds=None, test_ds=None):
+        if accelerator is None:
+            self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu',
+                                           fp16=args.model.use_fp16, split_batches=True)
+        else:
+            self.accelerator = accelerator
+        self.device = self.accelerator.device  # local device for each process
+
+        self.args = args
+
+        self.init_ds = init_ds
+        self.valid_ds = valid_ds
+        self.test_ds = test_ds
+
+        # training params
+        self.batch_size = self.args.batch_size
+        self.num_iter = self.args.num_iter
+        self.grad_clipping = self.args.grad_clipping
+
+        # get models
+        self.build_model()
+        self.build_ema()
+
+        # get optims
+        self.build_optimizer()
+
+        # get loggers
+        self.logger = self.get_logger('reg_train_logs')
+        self.save_logger = self.get_logger('reg_test_logs')
+
+        # get data
+        self.build_dataloaders()
+
+        self.npar = len(init_ds)
+
+        if not self.args.nosave:
+            self.plotter = self.get_plotter()
+
+        if self.accelerator.is_main_process:
+            ckpt_dir = './checkpoints/'
+            os.makedirs(ckpt_dir, exist_ok=True)
+            existing_versions = []
+            for d in os.listdir(ckpt_dir):
+                if os.path.isdir(os.path.join(ckpt_dir, d)) and d.startswith("version_"):
+                    existing_versions.append(int(d.split("_")[1]))
+
+            if len(existing_versions) == 0:
+                version = 0
+            else:
+                version = max(existing_versions) + 1
+
+            self.ckpt_dir = os.path.join(ckpt_dir, f"version_{version}")
+            os.makedirs(self.ckpt_dir, exist_ok=True)
+
+        self.stride = self.args.gif_stride
+        self.stride_log = self.args.log_stride
+
+        self.y_cond = self.args.y_cond
+        if self.y_cond is not None:
+            if isinstance(self.y_cond, str):
+                self.y_cond = eval(self.y_cond).to(self.device)
+            else:
+                self.y_cond = list(self.y_cond)
+                for j in range(len(self.y_cond)):
+                    if isinstance(self.y_cond[j], str):
+                        self.y_cond[j] = eval(self.y_cond[j]).to(self.device)
+                    else:
+                        self.y_cond[j] = torch.tensor([self.y_cond[j]]).to(self.device)
+
+                self.y_cond = torch.stack(self.y_cond, dim=0)
+
+        self.x_cond_true = self.args.x_cond_true
+        if self.x_cond_true is not None:
+            if isinstance(self.x_cond_true, str):
+                self.x_cond_true = eval(self.x_cond_true).to(self.device)
+            else:
+                self.x_cond_true = list(self.x_cond_true)
+                for j in range(len(self.x_cond_true)):
+                    if isinstance(self.x_cond_true[j], str):
+                        self.x_cond_true[j] = eval(self.x_cond_true[j]).to(self.device)
+                    else:
+                        self.x_cond_true[j] = torch.tensor([self.x_cond_true[j]]).to(self.device)
+
+                self.x_cond_true = torch.stack(self.x_cond_true, dim=0)
+
+    def get_logger(self, name='logs'):
+        return get_logger(self.args, name)
+
+    def get_plotter(self):
+        return get_cond_plotter(self, self.args)
+
+    def build_model(self):
+        self.net = get_cond_model(self.args).to(self.device)
+
+    def accelerate(self):
+        self.net, self.optimizer = self.accelerator.prepare(self.net, self.optimizer)
+
+    def update_ema(self):
+        if self.args.ema:
+            self.ema_helper = EMAHelper(mu=self.args.ema_rate, device=self.device)
+            self.ema_helper.register(self.accelerator.unwrap_model(self.net))
+
+    def build_ema(self):
+        if self.args.ema:
+            self.update_ema()
+
+    def build_optimizer(self):
+        self.optimizer = get_optimizer(self.net, self.args)
+
+    def build_dataloaders(self):
+        def worker_init_fn(worker_id):
+            np.random.seed(np.random.get_state()[1][0] + worker_id + self.accelerator.process_index)
+
+        self.kwargs = {"num_workers": self.args.num_workers,
+                       "pin_memory": self.args.pin_memory,
+                       "worker_init_fn": worker_init_fn,
+                       'drop_last': True}
+
+        self.save_npar = min(max(self.args.plot_npar, self.args.test_npar), len(self.init_ds))
+        self.test_batch_size = min(self.save_npar, self.args.test_batch_size)
+
+        self.init_dl = DataLoader(self.init_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs)
+        self.init_dl = self.accelerator.prepare(self.init_dl)
+        self.init_dl = repeater(self.init_dl)
+
+        self.save_init_dl = DataLoader(self.init_ds, batch_size=self.test_batch_size, **self.kwargs)
+        self.save_init_dl = self.accelerator.prepare(self.save_init_dl)
+        self.save_dls_dict = {"train": self.save_init_dl}
+
+        if self.valid_ds is not None:
+            self.save_valid_dl = DataLoader(self.valid_ds, batch_size=self.test_batch_size, **self.kwargs)
+            self.save_valid_dl = self.accelerator.prepare(self.save_valid_dl)
+            self.save_dls_dict["valid"] = self.save_valid_dl
+
+        if self.test_ds is not None:
+            self.save_test_dl = DataLoader(self.test_ds, batch_size=self.test_batch_size, **self.kwargs)
+            self.save_test_dl = self.accelerator.prepare(self.save_test_dl)
+            self.save_dls_dict["test"] = self.save_test_dl
+
+        batch = next(self.init_dl)
+        batch_x = batch[0]
+        batch_y = batch[1]
+        shape_x = batch_x[0].shape
+        shape_y = batch_y[0].shape
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+
+    def get_sample_net(self):
+        if self.args.ema:
+            sample_net = self.ema_helper.ema_copy(self.accelerator.unwrap_model(self.net))
+        else:
+            sample_net = self.net
+        return sample_net
+
+    def train(self):
+        self.accelerate()
+
+        for i in tqdm(range(1, self.num_iter + 1)):
+            self.net.train()
+
+            self.set_seed(seed=i + self.accelerator.process_index)
+
+            batch_x, batch_y = next(self.init_dl)
+            loss = F.mse_loss(self.net(batch_y), batch_x)
+            self.accelerator.backward(loss)
+
+            if self.args.grad_clipping:
+                clipping_param = self.args.grad_clip
+                total_norm = self.accelerator.clip_grad_norm_(self.net.parameters(), clipping_param)
+            else:
+                total_norm = 0.
+
+            self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
+
+            if i == 1 or i % self.stride_log == 0 or i == self.num_iter:
+                self.logger.log_metrics({'loss': loss, 'grad_norm': total_norm}, step=i)
+
+            if self.args.ema:
+                self.ema_helper.update(self.accelerator.unwrap_model(self.net))
+
+            self.save_step(i)
+
+        self.net = self.accelerator.unwrap_model(self.net)
+        self.clear()
+
+    def save_step(self, i):
+        if i == 1 or i % self.stride == 0 or i == self.num_iter:
+            sample_net = self.get_sample_net()
+
+            if self.accelerator.is_main_process:
+                name_net = 'cond_final_model_' + str(i) + '.ckpt'
+                name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
+                torch.save(self.accelerator.unwrap_model(self.net).state_dict(), name_net_ckpt)
+
+                if self.args.ema:
+                    name_net = 'sample_cond_final_model_' + str(i) + '.ckpt'
+                    name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
+                    torch.save(sample_net.state_dict(), name_net_ckpt)
+
+            self.plot_and_test_step(i)
+
+    def plot_and_test_step(self, i):
+        if not self.args.nosave:
+            sample_net = self.get_sample_net()
+            sample_net = sample_net.to(self.device)
+            sample_net.eval()
+            step = i
+
+            with torch.no_grad():
+                self.set_seed(seed=0 + self.accelerator.process_index)
+                test_metrics = self.plotter(sample_net, i)
+
+                if self.accelerator.is_main_process:
+                    self.save_logger.log_metrics(test_metrics, step=step)
+            return test_metrics
+
+    def set_seed(self, seed=0):
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    def clear(self):
+        self.accelerator.free_memory()
+        torch.cuda.empty_cache()

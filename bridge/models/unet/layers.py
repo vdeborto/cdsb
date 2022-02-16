@@ -432,3 +432,95 @@ class QKVAttention(nn.Module):
         # the combination of the value vectors.
         matmul_ops = 2 * b * (num_spatial ** 2) * c
         model.total_ops += th.DoubleTensor([matmul_ops])
+
+
+class BasicResBlock(nn.Module):
+    """
+    A residual block that can optionally change the number of channels.
+    :param channels: the number of input channels.
+    :param dropout: the rate of dropout.
+    :param out_channels: if specified, the number of out channels.
+    :param use_conv: if True and out_channels is specified, use a spatial
+        convolution instead of a smaller 1x1 convolution to change the
+        channels in the skip connection.
+    :param dims: determines if the signal is 1D, 2D, or 3D.
+    :param use_checkpoint: if True, use gradient checkpointing on this module.
+    :param up: if True, use this block for upsampling.
+    :param down: if True, use this block for downsampling.
+    """
+
+    def __init__(
+        self,
+        channels,
+        dropout,
+        out_channels=None,
+        use_conv=False,
+        dims=2,
+        use_checkpoint=False,
+        up=False,
+        down=False,
+    ):
+        super().__init__()
+        self.channels = channels
+        self.dropout = dropout
+        self.out_channels = out_channels or channels
+        self.use_conv = use_conv
+        self.use_checkpoint = use_checkpoint
+
+        self.in_layers = nn.Sequential(
+            normalization(channels),
+            nn.SiLU(inplace=True),
+            conv_nd(dims, channels, self.out_channels, 3, padding=1),
+        )
+
+        self.updown = up or down
+
+        if up:
+            self.h_upd = Upsample(channels, False, dims)
+            self.x_upd = Upsample(channels, False, dims)
+        elif down:
+            self.h_upd = Downsample(channels, False, dims)
+            self.x_upd = Downsample(channels, False, dims)
+        else:
+            self.h_upd = self.x_upd = nn.Identity()
+
+        self.out_layers = nn.Sequential(
+            normalization(self.out_channels),
+            nn.SiLU(inplace=True),
+            nn.Dropout(p=dropout, inplace=True),
+            zero_module(
+                conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
+            ),
+        )
+
+        if self.out_channels == channels:
+            self.skip_connection = nn.Identity()
+        elif use_conv:
+            self.skip_connection = conv_nd(
+                dims, channels, self.out_channels, 3, padding=1
+            )
+        else:
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
+
+    def forward(self, x):
+        """
+        Apply the block to a Tensor.
+        :param x: an [N x C x ...] Tensor of features.
+        :return: an [N x C x ...] Tensor of outputs.
+        """
+        return checkpoint(
+            self._forward, (x, ), self.parameters(), self.use_checkpoint
+        )
+
+    def _forward(self, x):
+        if self.updown:
+            in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
+            h = in_rest(x)
+            h = self.h_upd(h)
+            x = self.x_upd(x)
+            h = in_conv(h)
+        else:
+            h = self.in_layers(x)
+
+        h = self.out_layers(h)
+        return self.skip_connection(x) + h

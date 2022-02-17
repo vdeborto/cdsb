@@ -572,10 +572,18 @@ class IPFSequential(IPFBase):
 
             if self.args.mean_match:
                 pred = self.net[forward_or_backward](x, y, eval_steps) - x
+                loss = F.mse_loss(pred, out)
+
             else:
                 pred = self.net[forward_or_backward](x, y, eval_steps)
 
-            loss = F.mse_loss(pred, out)
+                if isinstance(self.args.loss_scale, str):
+                    gamma = self.gammas[steps_expanded].expand_as(pred)
+                    loss_scale = eval(self.args.loss_scale).to(self.device)
+                else:
+                    loss_scale = self.args.loss_scale
+
+                loss = F.mse_loss(loss_scale*pred, loss_scale*out)
 
             self.accelerator.backward(loss)
 

@@ -30,6 +30,7 @@ symmetric_gamma: False
 var_final_gamma_scale: False
 double_gamma_scale: True
 langevin_scale: 2*torch.sqrt(gamma)
+loss_scale: 2*torch.sqrt(gamma)
 
 # checkpoint
 checkpoint_run: True

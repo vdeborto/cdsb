@@ -207,7 +207,7 @@ def get_final_cond_model(accelerator, args, init_ds):
         mean_scale = args.cond_final_model.mean_scale
         if args.cond_final_model.adaptive_std:
             batch_x, batch_y = next(iter(DataLoader(init_ds, batch_size=NAPPROX, num_workers=args.num_workers)))
-            std = torch.std(batch_x - batch_y) * args.cond_final_model.std_scale
+            std = torch.std(batch_x - batch_y).to(accelerator.device) * args.cond_final_model.std_scale
             std = accelerator.gather(std).mean().item()
         else:
             std = args.cond_final_model.std_scale
@@ -227,7 +227,7 @@ def get_final_cond_model(accelerator, args, init_ds):
             with torch.no_grad():
                 batch_x, batch_y = next(iter(DataLoader(init_ds, batch_size=NAPPROX, num_workers=args.num_workers)))
                 pred_x = mean_model(batch_y)
-                std = torch.std(batch_x - pred_x) * args.cond_final_model.std_scale
+                std = torch.std(batch_x - pred_x).to(accelerator.device) * args.cond_final_model.std_scale
                 std = accelerator.gather(std).mean().item()
         else:
             std = args.cond_final_model.std_scale

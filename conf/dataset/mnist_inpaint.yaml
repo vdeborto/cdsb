@@ -16,7 +16,7 @@ cond_final: False
 cond_final_model:
   MODEL: BasicRegress
   mean_scale: 1.
-  std_scale: 1.1547
+  std_scale: 2.
   adaptive_std: True
   checkpoint: null
 

@@ -578,7 +578,10 @@ class IPFSequential(IPFBase):
                 pred = self.net[forward_or_backward](x, y, eval_steps)
 
                 if isinstance(self.args.loss_scale, str):
-                    gamma = self.gammas[steps_expanded].expand_as(pred)
+                    if forward_or_backward == 'f':
+                        gamma = self.gammas[eval_steps].expand_as(pred)
+                    elif forward_or_backward == 'b':
+                        gamma = self.gammas[steps_expanded].expand_as(pred)
                     loss_scale = eval(self.args.loss_scale).to(self.device)
                 else:
                     loss_scale = self.args.loss_scale

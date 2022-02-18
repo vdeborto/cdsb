@@ -22,7 +22,7 @@ def main(args):
 
     final_cond_model = None
     if args.cond_final:
-        final_cond_model = get_final_cond_model(args, init_ds)
+        final_cond_model = get_final_cond_model(accelerator, args, init_ds)
     if args.Model in ['PolyCond', 'BasisCond', 'KRRCond']:
         ipf = IPFAnalytic(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
                           final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)

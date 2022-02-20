@@ -196,8 +196,8 @@ class Plotter(object):
                     gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
 
                     if self.args.cond_final:
-                        mean_final = mean_final.expand_as(batch_x)
-                        var_final = var_final.expand_as(batch_x)
+                        mean_final = mean_final.expand_as(batch_x).clone()
+                        var_final = var_final.expand_as(batch_x).clone()
                         gather_mean_final = self.ipf.accelerator.gather(mean_final)
                         gather_var_final = self.ipf.accelerator.gather(var_final)
 

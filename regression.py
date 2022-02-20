@@ -16,10 +16,11 @@ def train(args):
                               fp16=args.model.use_fp16, split_batches=True)
     accelerator.print('Directory: ' + os.getcwd())
 
-    init_ds, _, _, _ = get_datasets(args)
+    assert not args.transfer
+    init_ds, _, mean_final, var_final = get_datasets(args)
     valid_ds, test_ds = get_valid_test_datasets(args)
 
-    ipf = IPFRegression(init_ds, args, accelerator=accelerator, valid_ds=valid_ds, test_ds=test_ds)
+    ipf = IPFRegression(init_ds, mean_final, var_final, args, accelerator=accelerator, valid_ds=valid_ds, test_ds=test_ds)
 
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net)

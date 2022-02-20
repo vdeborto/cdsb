@@ -11,7 +11,6 @@ from tqdm import tqdm
 from .ema import EMAHelper
 from . import repeater
 import time
-import random
 import torch.autograd.profiler as profiler
 from ..data import CacheLoader
 from bridge.runners.accelerator import Accelerator
@@ -490,7 +489,6 @@ class IPFBase:
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
-        random.seed(seed)
         np.random.seed(seed)
         torch.cuda.manual_seed_all(seed)
 
@@ -626,7 +624,7 @@ class IPFSequential(IPFBase):
 class IPFAnalytic(IPFBase):
     def __init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=None, final_cond_model=None,
                  valid_ds=None, test_ds=None):
-        super().__init__(self, init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator, final_cond_model=final_cond_model,
+        super().__init__(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator, final_cond_model=final_cond_model,
                          valid_ds=valid_ds, test_ds=test_ds)
         self.num_iter = 1
 
@@ -677,7 +675,7 @@ class IPFAnalytic(IPFBase):
 
 
 class IPFRegression:
-    def __init__(self, init_ds, args, accelerator=None, valid_ds=None, test_ds=None):
+    def __init__(self, init_ds, mean_final, var_final, args, accelerator=None, valid_ds=None, test_ds=None):
         if accelerator is None:
             self.accelerator = Accelerator(train_batch_size=args.batch_size, cpu=args.device == 'cpu',
                                            fp16=args.model.use_fp16, split_batches=True)
@@ -691,10 +689,31 @@ class IPFRegression:
         self.valid_ds = valid_ds
         self.test_ds = test_ds
 
+        self.mean_final = mean_final
+        self.var_final = var_final
+        self.std_final = torch.sqrt(self.var_final)
+
         # training params
+        self.num_steps = self.args.num_steps
         self.batch_size = self.args.batch_size
         self.num_iter = self.args.num_iter
         self.grad_clipping = self.args.grad_clipping
+
+        if self.args.symmetric_gamma:
+            n = self.num_steps // 2
+            if self.args.gamma_space == 'linspace':
+                gamma_half = np.linspace(self.args.gamma_min, self.args.gamma_max, n)
+            elif self.args.gamma_space == 'geomspace':
+                gamma_half = np.geomspace(self.args.gamma_min, self.args.gamma_max, n)
+            self.gammas = np.concatenate([gamma_half, np.flip(gamma_half)])
+        else:
+            if self.args.gamma_space == 'linspace':
+                self.gammas = np.linspace(self.args.gamma_min, self.args.gamma_max, self.num_steps)
+            elif self.args.gamma_space == 'geomspace':
+                self.gammas = np.geomspace(self.args.gamma_min, self.args.gamma_max, self.num_steps)
+        self.gammas = torch.tensor(self.gammas).to(self.device)
+        self.T = torch.sum(self.gammas)
+        self.accelerator.print("T:", self.T.item())
 
         # get models
         self.build_model()
@@ -706,6 +725,8 @@ class IPFRegression:
         # get loggers
         self.logger = self.get_logger('reg_train_logs')
         self.save_logger = self.get_logger('reg_test_logs')
+
+        self.time_sampler = None  # torch.distributions.categorical.Categorical(prob_vec)
 
         # get data
         self.build_dataloaders()
@@ -824,6 +845,12 @@ class IPFRegression:
         self.shape_x = shape_x
         self.shape_y = shape_y
 
+        self.langevin = Langevin(self.num_steps, shape_x, shape_y, self.gammas, self.time_sampler,
+                                 mean_final=self.mean_final, var_final=self.var_final,
+                                 mean_match=self.args.mean_match, out_scale=self.args.langevin_scale,
+                                 var_final_gamma_scale=self.args.var_final_gamma_scale,
+                                 double_gamma_scale=self.args.double_gamma_scale)
+
     def get_sample_net(self):
         if self.args.ema:
             sample_net = self.ema_helper.ema_copy(self.accelerator.unwrap_model(self.net))
@@ -840,7 +867,11 @@ class IPFRegression:
             self.set_seed(seed=i + self.accelerator.process_index)
 
             batch_x, batch_y = next(self.init_dl)
-            loss = F.mse_loss(self.net(batch_y), batch_x)
+
+            x_tot, _, _, _ = self.langevin.record_init_langevin(batch_x, batch_y)
+            x_last = x_tot[:, -1]
+            loss = F.mse_loss(self.net(batch_y), x_last)
+
             self.accelerator.backward(loss)
 
             if self.args.grad_clipping:
@@ -896,7 +927,6 @@ class IPFRegression:
 
     def set_seed(self, seed=0):
         torch.manual_seed(seed)
-        random.seed(seed)
         np.random.seed(seed)
         torch.cuda.manual_seed_all(seed)
 

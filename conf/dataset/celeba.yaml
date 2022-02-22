@@ -8,27 +8,23 @@ data:
   channels: 3
   random_flip: true
 y_cond:
-  - test_ds[0][1]
-  - test_ds[1][1]
-  - test_ds[2][1]
-  - test_ds[3][1]
-  - test_ds[4][1]
-  - test_ds[5][1]
-  - test_ds[6][1]
-  - test_ds[7][1]
-  - test_ds[8][1]
-  - test_ds[9][1]
+  - test_ds[1544][1]
+  - test_ds[7635][1]
+  - test_ds[3282][1]
+  - test_ds[3086][1]
+  - test_ds[17378][1]
+  - test_ds[10714][1]
+  - test_ds[19658][1]
+  - test_ds[12916][1]
 x_cond_true:
-  - test_ds[0][0]
-  - test_ds[1][0]
-  - test_ds[2][0]
-  - test_ds[3][0]
-  - test_ds[4][0]
-  - test_ds[5][0]
-  - test_ds[6][0]
-  - test_ds[7][0]
-  - test_ds[8][0]
-  - test_ds[9][0]
+  - test_ds[1544][0]
+  - test_ds[7635][0]
+  - test_ds[3282][0]
+  - test_ds[3086][0]
+  - test_ds[17378][0]
+  - test_ds[10714][0]
+  - test_ds[19658][0]
+  - test_ds[12916][0]
 
 
 # transfer

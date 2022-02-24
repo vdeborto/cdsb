@@ -767,7 +767,7 @@ class OneDCondPlotter(Plotter):
 
                 if n is not None:
                     str_title = 'CDSB iteration: ' + str(n)
-                    plt.title(str_title)
+                    plt.title(str_title, fontsize=16)
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
                 plt.close()

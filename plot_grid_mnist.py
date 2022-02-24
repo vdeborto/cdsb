@@ -75,8 +75,7 @@ if add_title:
         else:
             plt.title(' ')
         plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(filename, dpi=DPI)
+        plt.savefig(filename, bbox_inches='tight', dpi=DPI)
         plt.close()
 
     save_image_with_metrics(im_list, os.path.join(base_dir, "im_grid_last_new.png"), "last", nrow=nrow)

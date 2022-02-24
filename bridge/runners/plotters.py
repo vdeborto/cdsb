@@ -457,10 +457,9 @@ class ImPlotter(Plotter):
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                plt.title('CDSB iteration: ' + str(n) + '\n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
-                    round(ssim_result, 2)))
+                plt.title('CDSB iteration: ' + str(n) + '\npsnr: ' + str(round(psnr_result, 2)) + '   ssim: ' + str(round(ssim_result, 2)))
                 plt.axis('off')
-                plt.savefig(filename)
+                plt.savefig(filename, bbox_inches='tight', dpi=DPI)
                 plt.close()
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_start.png')
@@ -562,9 +561,9 @@ class ImPlotter(Plotter):
                 ssim.reset()
 
                 plt.suptitle('CDSB iteration: ' + str(n) +
-                             '\n psnr: ' + str(round(psnr_result, 2)) + ' mean psnr: ' + str(round(mean_psnr_result, 2)) +
-                             '\n ssim: ' + str(round(ssim_result, 2)) + ' mean ssim: ' + str(round(mean_ssim_result, 2)))
-                plt.savefig(filename)
+                             '\npsnr: ' + str(round(psnr_result, 2)) + '   mean psnr: ' + str(round(mean_psnr_result, 2)) +
+                             '\nssim: ' + str(round(ssim_result, 2)) + '   mean ssim: ' + str(round(mean_ssim_result, 2)))
+                plt.savefig(filename, bbox_inches='tight', dpi=DPI)
                 plt.close()
 
             plot_name = 'cond_im_grid_' + tag
@@ -1269,10 +1268,9 @@ class BasicImPlotter(BasicPlotter):
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                plt.title('Regression: \n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
-                    round(ssim_result, 2)))
+                plt.title('Regression\npsnr: ' + str(round(psnr_result, 2)) + '   ssim: ' + str(round(ssim_result, 2)))
                 plt.axis('off')
-                plt.savefig(filename)
+                plt.savefig(filename, bbox_inches='tight', dpi=DPI)
                 plt.close()
 
             filename_grid_png = os.path.join(im_dir, 'im_grid_last.png')
@@ -1335,9 +1333,8 @@ class BasicImPlotter(BasicPlotter):
                 ssim_result = ssim(uint8_batch_x, uint8_x_init).item()
                 ssim.reset()
 
-                plt.suptitle('Regression \n psnr: ' + str(round(psnr_result, 2)) +
-                             '\n ssim: ' + str(round(ssim_result, 2)))
-                plt.savefig(filename)
+                plt.suptitle('Regression\npsnr: ' + str(round(psnr_result, 2)) + '   ssim: ' + str(round(ssim_result, 2)))
+                plt.savefig(filename, bbox_inches='tight', dpi=DPI)
                 plt.close()
 
             plot_name = 'cond_im_grid_'

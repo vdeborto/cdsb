@@ -307,7 +307,7 @@ class Plotter(object):
                         plt.clf()
                         fig = plt.figure(figsize=(5*len(dims), 4))
                         if n is not None:
-                            str_title = 'IPFP iteration: ' + str(n)
+                            str_title = 'CDSB iteration: ' + str(n)
                             plt.title(str_title)
 
                         for d in range(len(dims)):
@@ -359,7 +359,7 @@ class Plotter(object):
                         plt.clf()
                         fig = plt.figure(figsize=(5*len(dims), 4))
                         if n is not None:
-                            str_title = 'IPFP iteration: ' + str(n)
+                            str_title = 'CDSB iteration: ' + str(n)
                             plt.title(str_title)
 
                         for d in range(len(dims)):
@@ -457,7 +457,7 @@ class ImPlotter(Plotter):
                 uint8_batch_x_grid = vutils.make_grid(uint8_batch_x, **kwargs).permute(1, 2, 0)
                 plt.imshow(uint8_batch_x_grid)
 
-                plt.title('IPFP iteration: ' + str(n) + '\n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
+                plt.title('CDSB iteration: ' + str(n) + '\n psnr: ' + str(round(psnr_result, 2)) + '\n ssim: ' + str(
                     round(ssim_result, 2)))
                 plt.axis('off')
                 plt.savefig(filename)
@@ -561,7 +561,7 @@ class ImPlotter(Plotter):
                 mean_ssim_result = ssim(uint8_batch_x_mean, uint8_x_init).item()
                 ssim.reset()
 
-                plt.suptitle('IPFP iteration: ' + str(n) +
+                plt.suptitle('CDSB iteration: ' + str(n) +
                              '\n psnr: ' + str(round(psnr_result, 2)) + ' mean psnr: ' + str(round(mean_psnr_result, 2)) +
                              '\n ssim: ' + str(round(ssim_result, 2)) + ' mean ssim: ' + str(round(mean_ssim_result, 2)))
                 plt.savefig(filename)
@@ -683,7 +683,7 @@ class OneDCondPlotter(Plotter):
                 filename = os.path.join(im_dir, filename)
                 plt.clf()
                 if n is not None:
-                    str_title = 'IPFP iteration: ' + str(n)
+                    str_title = 'CDSB iteration: ' + str(n)
                     plt.title(str_title)
                 kde_yx = kde.gaussian_kde([y_start[:, 0], x_start_tot[k, :, 0]])
                 xi, yi = np.mgrid[ylim[0]:ylim[1]:npts*1j, xlim[0]:xlim[1]:npts*1j]
@@ -766,7 +766,7 @@ class OneDCondPlotter(Plotter):
                 filename = os.path.join(im_dir, filename)
 
                 if n is not None:
-                    str_title = 'IPFP iteration: ' + str(n)
+                    str_title = 'CDSB iteration: ' + str(n)
                     plt.title(str_title)
                 plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                 plot_paths_reg.append(filename)
@@ -873,7 +873,7 @@ class OneDRevCondPlotter(Plotter):
                 filename = os.path.join(im_dir, filename)
                 plt.clf()
                 if n is not None:
-                    str_title = 'IPFP iteration: ' + str(n)
+                    str_title = 'CDSB iteration: ' + str(n)
                     plt.title(str_title)
                 g = sns.kdeplot(x=x_start_tot[k, :, 0], y=y_start[:, 0])
                 g.set(xlim=xlim)
@@ -959,7 +959,7 @@ class FiveDCondPlotter(Plotter):
                     filename = os.path.join(im_dir, filename)
 
                     if n is not None:
-                        str_title = 'IPFP iteration: ' + str(n)
+                        str_title = 'CDSB iteration: ' + str(n)
                         plt.title(str_title)
                     plt.savefig(filename, bbox_inches = 'tight', transparent = True, dpi=DPI)
                     plot_paths_reg.append(filename)
@@ -1040,7 +1040,7 @@ class BiochemicalPlotter(Plotter):
                 filename = os.path.join(im_dir, filename)
                 plt.clf()
                 if n is not None:
-                    str_title = 'IPFP iteration: ' + str(n)
+                    str_title = 'CDSB iteration: ' + str(n)
                     plt.title(str_title)
                 kde_xy = kde.gaussian_kde([x_start_tot_cond[k, :, 0], x_start_tot_cond[k, :, 1]])
                 xi, yi = np.mgrid[xlim[0]:xlim[1]:npts*1j, ylim[0]:ylim[1]:npts*1j]

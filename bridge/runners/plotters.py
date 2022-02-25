@@ -562,7 +562,7 @@ class ImPlotter(Plotter):
 
                 plt.suptitle('CDSB iteration: ' + str(n) +
                              '\npsnr: ' + str(round(psnr_result, 2)) + '   mean psnr: ' + str(round(mean_psnr_result, 2)) +
-                             '\nssim: ' + str(round(ssim_result, 2)) + '   mean ssim: ' + str(round(mean_ssim_result, 2)))
+                             '\nssim: ' + str(round(ssim_result, 2)) + '   mean ssim: ' + str(round(mean_ssim_result, 2)), fontsize=16)
                 plt.savefig(filename, bbox_inches='tight', dpi=DPI)
                 plt.close()
 

@@ -19,7 +19,8 @@ def to_uint8_tensor(tensor):
 np.random.seed(1234)
 
 base_dir = "experiments/stackedmnist_inpaint_center/2022-02-15/cfg-model.dropout=0.1,n_ipf=5,num_cache_batches=4,num_iter=100000,num_steps=10/18-02-54/im/version_0/100000_b_5/cond"
-im_dir = os.path.join(base_dir, "im_")
+fwdbwd = False
+im_dir = os.path.join(base_dir, "im_fwdbwd" if fwdbwd else "im_")
 num_im = 100
 nrow = 8
 im_idx_list = np.arange(nrow)
@@ -111,4 +112,4 @@ if add_title:
         plt.savefig(filename, bbox_inches='tight', dpi=DPI)
         plt.close()
 
-    save_image_with_metrics(batch_x, os.path.join(base_dir, "im_grid_last_new.png"))
+    save_image_with_metrics(batch_x, os.path.join(base_dir, "cond_im_grid_fwdbwd_last_new.png" if fwdbwd else "cond_im_grid__last_new.png"))

@@ -245,11 +245,11 @@ class Plotter(object):
             start = time.time()
 
             batch_x, _, _, _, var_final = self.ipf.sample_batch(dl, self.ipf.save_final_dl, fb, y_c=y_c)
-            x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net, var_final=var_final)
+            x_tot_c = self.ipf.backward_sample(batch_x, y_c, sample_net=sample_net, var_final=var_final, permute=False)
 
             gather_batch_x = self.ipf.accelerator.gather(batch_x).cpu()
             gather_x_tot_c = self.ipf.accelerator.gather(x_tot_c).cpu()
-
+            gather_x_tot_c = gather_x_tot_c.permute(1, 0, *list(range(2, len(gather_x_tot_c.shape))))
             stop = time.time()
             return gather_batch_x, gather_x_tot_c, stop-start
 
@@ -262,15 +262,17 @@ class Plotter(object):
 
             if fb == 'f':
                 x_tot_fwd, x_tot_fwdbwd_c = self.ipf.forward_backward_sample(init_batch_x, init_batch_y, y_c, n, fb,
-                                                                             return_fwd_tot=True, sample_net_f=sample_net)
+                                                                             return_fwd_tot=True, sample_net_f=sample_net, permute=False)
             elif fb == 'b':
                 x_tot_fwd, x_tot_fwdbwd_c = self.ipf.forward_backward_sample(init_batch_x, init_batch_y, y_c, n, fb,
-                                                                             return_fwd_tot=True, sample_net_b=sample_net)
+                                                                             return_fwd_tot=True, sample_net_b=sample_net, permute=False)
 
             gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x).cpu()
             gather_init_batch_y = self.ipf.accelerator.gather(init_batch_y).cpu()
             gather_x_tot_fwd = self.ipf.accelerator.gather(x_tot_fwd).cpu()
             gather_x_tot_fwdbwd_c = self.ipf.accelerator.gather(x_tot_fwdbwd_c).cpu()
+            gather_x_tot_fwd = gather_x_tot_fwd.permute(1, 0, *list(range(2, len(gather_x_tot_fwd.shape))))
+            gather_x_tot_fwdbwd_c = gather_x_tot_fwdbwd_c.permute(1, 0, *list(range(2, len(gather_x_tot_fwdbwd_c.shape))))
 
             stop = time.time()
             return gather_init_batch_x, gather_init_batch_y, gather_x_tot_fwd, gather_x_tot_fwdbwd_c, stop-start

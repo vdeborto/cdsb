@@ -414,7 +414,7 @@ class IPFBase:
         var_final = std_final ** 2
         return batch_x, batch_y, init_batch_x, mean_final, var_final
 
-    def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None, var_final=None):
+    def backward_sample(self, final_batch_x, y_c, fix_seed=False, sample_net=None, var_final=None, permute=True):
         if sample_net is None:
             sample_net = self.get_sample_net('b')
             sample_net = sample_net.to(self.device)
@@ -427,11 +427,12 @@ class IPFBase:
             x_tot_c, _, _, _ = self.langevin.record_langevin_seq(sample_net, final_batch_x, y_c, 'b', sample=True,
                                                                  var_final=var_final)
 
-            x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
+            if permute:
+                x_tot_c = x_tot_c.permute(1, 0, *list(range(2, len(x_tot_c.shape))))  # (num_steps, num_samples, *shape_x)
 
         return x_tot_c
 
-    def forward_sample(self, init_batch_x, init_batch_y, n, fb, fix_seed=False, sample_net=None):
+    def forward_sample(self, init_batch_x, init_batch_y, n, fb, fix_seed=False, sample_net=None, permute=True):
         if sample_net is None:
             sample_net = self.get_sample_net('f')
             sample_net = sample_net.to(self.device)
@@ -452,19 +453,23 @@ class IPFBase:
                 x_tot, _, _, _ = self.langevin.record_langevin_seq(sample_net, init_batch_x, init_batch_y, 'f',
                                                                    var_final=var_final)
 
-        x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
+        if permute:
+            x_tot = x_tot.permute(1, 0, *list(range(2, len(x_tot.shape))))  # (num_steps, num_samples, *shape_x)
 
         return x_tot
 
     def forward_backward_sample(self, init_batch_x, init_batch_y, y_c, n, fb, fix_seed=False, return_fwd_tot=False,
-                                sample_net_f=None, sample_net_b=None):
+                                sample_net_f=None, sample_net_b=None, permute=True):
         assert not self.cond_final
 
-        x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fb, fix_seed=fix_seed, sample_net=sample_net_f)
-        final_batch_x = x_tot[-1]
+        x_tot = self.forward_sample(init_batch_x, init_batch_y, n, fb, fix_seed=fix_seed, sample_net=sample_net_f, permute=permute)
+        if permute:
+            final_batch_x = x_tot[-1]
+        else:
+            final_batch_x = x_tot[:, -1]
         if return_fwd_tot:
-            return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
-        return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b)
+            return x_tot, self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b, permute=permute)
+        return self.backward_sample(final_batch_x, y_c, fix_seed=fix_seed, sample_net=sample_net_b, permute=permute)
 
     def plot_and_test_step(self, i, n, fb):
         if not self.args.nosave:

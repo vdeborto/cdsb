@@ -29,12 +29,12 @@ ax2.set_title("Variance")
 ax3.set_title("Skew")
 ax4.set_title("Kurtosis")
 
-ax1.set_xlabel("IPF Iteration")
-ax2.set_xlabel("IPF Iteration")
-ax3.set_xlabel("IPF Iteration")
-ax4.set_xlabel("IPF Iteration")
+ax1.set_xlabel("CDSB Iteration")
+ax2.set_xlabel("CDSB Iteration")
+ax3.set_xlabel("CDSB Iteration")
+ax4.set_xlabel("CDSB Iteration")
 
 ax4.legend()
 plt.tight_layout()
-plt.savefig("biochemical_result.pdf")
+plt.savefig("biochemical_result.png")
 

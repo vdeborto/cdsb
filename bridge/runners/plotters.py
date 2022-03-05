@@ -597,6 +597,22 @@ class ImPlotter(Plotter):
                         filename_png = os.path.join(im_dir_j, '{:05}.png'.format(k))
                         save_image(x_tot_cond[j, -1, k], filename_png)
 
+                    filename_png = os.path.join(im_dir, f'im_grid_{j}.png')
+                    save_image(x_tot_cond[j, -1], filename_png, nrow=10, pad_value=1)
+
+                    filename_png = os.path.join(im_dir, f'im_mean_{j}.png')
+                    save_image(x_tot_cond[j, -1].mean(0), filename_png)
+
+                    filename_png = os.path.join(im_dir, f'im_std_{j}.png')
+                    save_image(x_tot_cond[j, -1].std(0)-1, filename_png)
+
+                    filename_png = os.path.join(im_dir, f'data_y_{j}.png')
+                    save_image(y_cond[j], filename_png)
+
+                    if x_init_cond is not None:
+                        filename_png = os.path.join(im_dir, f'data_x_{j}.png')
+                        save_image(x_init_cond[j], filename_png)
+
     def plot_sequence_cond_fwdbwd(self, x_init, y_init, x_tot_fwd, y_cond, x_tot_cond, data, i, n, fb,
                                   x_init_cond=None, tag='fwdbwd', freq=None):
         self.plot_sequence_cond(x_tot_fwd[:, -1], y_cond, x_tot_cond, data, i, n, fb, x_init_cond=x_init_cond, tag=tag, freq=freq)

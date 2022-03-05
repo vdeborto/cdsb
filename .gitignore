@@ -133,3 +133,5 @@ experiments/
 .idea/
 
 /data/
+
+/slurm/

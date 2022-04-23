@@ -1237,7 +1237,8 @@ class BasicPlotter(object):
         pass
 
     def test_joint(self, y_start, x_last, x_init, data, i, dl_name='train'):
-        return {}
+        x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(x_init.to(self.ipf.device), y_start.to(self.ipf.device))
+        return {dl_name + "/mse_loss": torch.nn.functional.mse_loss(x_last.to(self.ipf.device), x_tot[:, -1])}
 
     def test_cond(self, y_cond, x_last_cond, data, i, x_init_cond=None):
         return {}

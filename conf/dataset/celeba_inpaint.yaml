@@ -1,0 +1,96 @@
+# @package _global_
+
+# data 
+Dataset: celeba
+data:
+  dataset: "inpaint_center"
+  image_size: 64
+  channels: 3
+  random_flip: true
+y_cond:
+  - test_ds[1544][1]
+  - test_ds[7635][1]
+  - test_ds[3282][1]
+  - test_ds[3086][1]
+  - test_ds[17378][1]
+  - test_ds[10714][1]
+  - test_ds[19658][1]
+  - test_ds[12916][1]
+  # - test_ds[9830][1]
+  # - test_ds[6186][1]
+  # - test_ds[8617][1]
+  # - test_ds[7118][1]
+  # - test_ds[15497][1]
+  # - test_ds[17305][1]
+  # - test_ds[16745][1]
+  # - test_ds[6431][1]
+x_cond_true:
+  - test_ds[1544][0]
+  - test_ds[7635][0]
+  - test_ds[3282][0]
+  - test_ds[3086][0]
+  - test_ds[17378][0]
+  - test_ds[10714][0]
+  - test_ds[19658][0]
+  - test_ds[12916][0]
+  # - test_ds[9830][0]
+  # - test_ds[6186][0]
+  # - test_ds[8617][0]
+  # - test_ds[7118][0]
+  # - test_ds[15497][0]
+  # - test_ds[17305][0]
+  # - test_ds[16745][0]
+  # - test_ds[6431][0]
+
+
+# transfer
+transfer: False
+Dataset_transfer: mnist
+cond_final: False
+cond_final_model:
+  MODEL: BasicRegress
+  mean_scale: 1.
+  std_scale: 0.4768
+  adaptive_std: False
+  checkpoint: experiments/celeba_inpaint_center/2022-04-22/cfg-gamma_max=0.005,num_iter=100000/16-35-44/checkpoints/version_0/sample_cond_final_model_40000.ckpt
+
+
+adaptive_mean: False
+final_adaptive: False
+mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
+var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
+
+# device
+device: cuda
+num_workers: 8
+pin_memory: True
+
+# logging
+log_stride: 10
+gif_stride: 10000
+plot_npar: 200
+test_npar: 100
+
+# training
+cache_refresh_stride: 2500
+cache_npar: 256
+num_cache_batches: 20
+use_prev_net: True
+ema: True
+ema_rate: 0.999
+grad_clipping: True
+grad_clip: 1.0
+batch_size: 128
+num_iter: 50000
+n_ipf: 25
+lr: 0.0001
+
+# diffusion schedule
+num_steps: 50
+gamma_max: 0.1
+gamma_min: 0.00005
+gamma_space: linspace
+weight_distrib: False
+weight_distrib_alpha: 100
+fast_sampling: True
+

@@ -66,6 +66,16 @@ class Cond_CelebA(CelebA):
 
             Y = torch.nn.functional.interpolate(Y, (imageSize, imageSize)).squeeze(0)
 
+        elif task[0] == 'inpaint':
+            mask = torch.zeros([1, imageSize, imageSize])
+            if task[1] == 'center':
+                mask[:, imageSize//4:-imageSize//4, imageSize//4:-imageSize//4] = 1
+            elif task[1] == 'left':
+                mask[:, :, :imageSize//2] = 1
+            elif task[1] == 'right':
+                mask[:, :, imageSize//2:] = 1
+            Y = X * (1 - mask)
+        
         else:
             raise NotImplementedError
 

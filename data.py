@@ -35,6 +35,7 @@ def main():
         Cond_Stacked_MNIST(task, root=root, load=False, split='test', num_channels=1)
 
     if args.data == 'celeba':
+        root = args.data_dir
         try:
             CelebA(root, split='all', download=True)
 
@@ -43,7 +44,6 @@ def main():
             from torchvision.datasets.utils import download_file_from_google_drive
             import shutil
 
-            root = args.data_dir
             data_dir = os.path.join(root, "celeba")
 
             if os.path.exists(data_dir):
@@ -52,13 +52,13 @@ def main():
             if not os.path.exists(data_dir):
                 os.mkdir(data_dir)
 
-            download_file_from_google_drive("1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ", data_dir, "celeba.zip", "70ca6a664804f6967e495e9e95904675")
+            download_file_from_google_drive("1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ", root, "celeba.zip", "70ca6a664804f6967e495e9e95904675")
 
-            with zipfile.ZipFile(os.path.join(data_dir, "celeba.zip"), "r") as f:
+            with zipfile.ZipFile(os.path.join(root, "celeba.zip"), "r") as f:
                 f.extractall(root)
 
             CelebA(root, split='all', download=True)
-    
+
 
 if __name__ == '__main__':
     main()  

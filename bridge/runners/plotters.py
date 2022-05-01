@@ -570,6 +570,11 @@ class ImPlotter(Plotter):
 
             plot_name = 'cond_im_grid_' + tag
             name_gif = f'{iter_name}_{plot_name}'
+
+            filename_grid_png = os.path.join(im_dir, plot_name + '_start.png')
+            save_image_with_metrics(x_start, filename_grid_png)
+            self.ipf.save_logger.log_image(f"cond/{plot_name}_start", [filename_grid_png], step=self.step, fb=fb)
+
             filename_grid_png = os.path.join(im_dir, plot_name + '_last.png')
             save_image_with_metrics(x_tot_cond[:, -1], filename_grid_png)
             self.ipf.save_logger.log_image(f"cond/{plot_name}_last", [filename_grid_png], step=self.step, fb=fb)

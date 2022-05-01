@@ -4,7 +4,7 @@ job:
   config:
     # configuration for the ${hydra.job.override_dirname} runtime variable
     override_dirname:
-      exclude_keys: [name, launcher, run, training, device, data, data_dir, dataset, load, Dataset, data.dataset, test_batch_size, y_cond, x_cond_true, LOGGER, plot_npar]
+      exclude_keys: [name, launcher, run, training, device, data, data_dir, dataset, load, Dataset, data.dataset, test_batch_size, y_cond, x_cond_true, LOGGER, plot_npar, paths]
 
 run:
   # Output directory for normal runs

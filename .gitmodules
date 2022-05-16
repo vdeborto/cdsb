@@ -4,3 +4,6 @@
 [submodule "gitmodules/progressive_growing_of_gans"]
 	path = gitmodules/progressive_growing_of_gans
 	url = https://github.com/tkarras/progressive_growing_of_gans.git
+[submodule "gitmodules/celebA-HQ-dataset-download"]
+	path = gitmodules/celebA-HQ-dataset-download
+	url = https://github.com/suvojit-0x55aa/celebA-HQ-dataset-download.git

@@ -1,0 +1,6 @@
+[submodule "gitmodules/pulse"]
+	path = gitmodules/pulse
+	url = https://github.com/adamian98/pulse.git
+[submodule "gitmodules/progressive_growing_of_gans"]
+	path = gitmodules/progressive_growing_of_gans
+	url = https://github.com/tkarras/progressive_growing_of_gans.git

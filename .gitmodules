@@ -14,3 +14,7 @@
 	path = gitmodules/patch-forensics
 	url = https://github.com/chail/patch-forensics.git
 	ignore = dirty
+[submodule "gitmodules/NVAE"]
+	path = gitmodules/NVAE
+	url = https://github.com/NVlabs/NVAE.git
+	ignore = dirty

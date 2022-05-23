@@ -18,3 +18,7 @@
 	path = gitmodules/NVAE
 	url = https://github.com/NVlabs/NVAE.git
 	ignore = dirty
+[submodule "gitmodules/mmediting"]
+	path = gitmodules/mmediting
+	url = https://github.com/open-mmlab/mmediting.git
+	ignore = dirty

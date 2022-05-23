@@ -12,7 +12,6 @@ sys.path.append('..')
 
 
 from bridge.data.stackedmnist import Stacked_MNIST, Cond_Stacked_MNIST
-from bridge.data.emnist import EMNIST
 from bridge.data.celeba import CelebA
 
 

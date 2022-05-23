@@ -8,8 +8,8 @@ from ..data.one_dim_rev_cond import one_dim_rev_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
-from ..data.emnist import EMNIST
 from ..data.celeba import Cond_CelebA
+from ..data.lmdb_dataset import Cond_LMDBDataset
 from .plotters import *
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
@@ -36,7 +36,7 @@ def get_plotter(runner, args):
         return FiveDCondPlotter(runner, args)
     elif dataset_tag == DATASET_BIOCHEMICAL:
         return BiochemicalPlotter(runner, args)
-    elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA]:
+    elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBAHQ, DATASET_FFHQ]:
         return ImPlotter(runner, args)
     else:
         return Plotter(runner, args)
@@ -44,7 +44,7 @@ def get_plotter(runner, args):
 
 def get_cond_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
-    if dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA]:
+    if dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBAHQ, DATASET_FFHQ]:
         return BasicImPlotter(runner, args)
     else:
         return BasicPlotter(runner, args)
@@ -265,7 +265,8 @@ DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_LORENZ = 'lorenz'
 DATASET_CELEBA = 'celeba'
 DATASET_STACKEDMNIST = 'stackedmnist'
-DATASET_EMNIST = 'emnist'
+DATASET_CELEBAHQ = 'celebahq'
+DATASET_FFHQ = 'ffhq'
 
 
 def get_datasets(args):
@@ -336,16 +337,21 @@ def get_datasets(args):
         load = args.load
         init_ds = Cond_Stacked_MNIST(data_tag, root=root, load=load, split='train', num_channels=args.data.channels)
 
-    # EMNIST DATASET
+    # CELEBAHQ, FFHQ DATASET
 
-    # if dataset_tag == DATASET_EMNIST:
-    #     root = os.path.join(data_dir, 'EMNIST')
-    #     saved_file = os.path.join(root, "data.pt")
-    #     load = os.path.exists(saved_file)
-    #     load = args.load
-    #     init_ds = EMNIST(root, load=load, source_root=root,
-    #                      train=True, num_channels=args.data.channels,
-    #                      imageSize=args.data.image_size)
+    if dataset_tag in [DATASET_CELEBAHQ, DATASET_FFHQ]:
+        train_transform = [transforms.Resize(args.data.image_size),
+                           transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        if args.data.random_flip:
+            train_transform.insert(1, transforms.RandomHorizontalFlip())
+
+        data_tag = args.data.dataset
+        root = data_dir
+        if dataset_tag == DATASET_CELEBAHQ:
+            name = 'celeba'
+        else:
+            name = 'ffhq'
+        init_ds = Cond_LMDBDataset(data_tag, root, name=name, train=True, transform=cmp(train_transform))
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
 
@@ -362,31 +368,6 @@ def get_final_dataset(args, init_ds):
 
     data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
 
-    # if dataset_transfer_tag == DATASET_STACKEDMNIST:
-    #     root = os.path.join(data_dir, 'mnist')
-    #     saved_file = os.path.join(root, "data.pt")
-    #     load = os.path.exists(saved_file)
-    #     load = args.load
-    #     final_ds = Cond_Stacked_MNIST(args, root=root, load=load, source_root=root,
-    #                                   train=True, num_channels=args.data.channels,
-    #                                   imageSize=args.data.image_size,
-    #                                   device=args.device)
-    #     mean_final = torch.tensor(0.)
-    #     var_final = torch.tensor(1. * 10 ** 3)
-    #
-    # # EMNIST DATASET
-    #
-    # if dataset_transfer_tag == DATASET_EMNIST:
-    #     root = os.path.join(data_dir, 'EMNIST')
-    #     saved_file = os.path.join(root, "data.pt")
-    #     load = os.path.exists(saved_file)
-    #     load = args.load
-    #     final_ds = EMNIST(root, load=load, source_root=root,
-    #                       train=True, num_channels=args.data.channels,
-    #                       imageSize=args.data.image_size,
-    #                       device=args.device)
-    #     mean_final = torch.tensor(0.)
-    #     var_final = torch.tensor(1. * 10 ** 3)
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
     if not args.transfer:
@@ -442,6 +423,20 @@ def get_valid_test_datasets(args):
         root = data_dir
         valid_ds = Cond_CelebA(data_tag, root, split='valid', transform=cmp(test_transform), download=False)
         test_ds = Cond_CelebA(data_tag, root, split='test', transform=cmp(test_transform), download=False)
+
+    # CELEBAHQ, FFHQ DATASET
+
+    if dataset_tag in [DATASET_CELEBAHQ, DATASET_FFHQ]:
+        test_transform = [transforms.Resize(args.data.image_size),
+                          transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        data_tag = args.data.dataset
+        root = data_dir
+        if dataset_tag == DATASET_CELEBAHQ:
+            name = 'celeba'
+        else:
+            name = 'ffhq'
+        test_ds = Cond_LMDBDataset(data_tag, root, name=name, train=False, transform=cmp(test_transform))
 
     return valid_ds, test_ds
 

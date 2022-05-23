@@ -24,11 +24,6 @@ class Langevin(torch.nn.Module):
         self.d_x = shape_x # dimension of object to diffuse
         self.d_y = shape_y # dimension of conditioning
         self.gammas = gammas # schedule
-        # gammas_vec = torch.ones(self.num_steps, *self.d_x, device=device)
-        # for k in range(num_steps):
-        #     gammas_vec[k] = gammas[k]
-        # self.gammas_vec = gammas_vec
-
 
         self.steps = torch.arange(self.num_steps).to(self.device)
         self.time = torch.cumsum(self.gammas, 0).to(self.device)
@@ -60,15 +55,19 @@ class Langevin(torch.nn.Module):
             gamma = self.gammas[k]
             if self.double_gamma_scale:
                 gamma = gamma * 2
-            scaled_gamma = gamma
+
             if self.var_final_gamma_scale:
-                scaled_gamma = scaled_gamma * var_final
+                var_gamma_ratio = 1 / gamma
+                scaled_gamma = gamma * var_final
+            else:
+                var_gamma_ratio = var_final / gamma
+                scaled_gamma = gamma
             
-            gradx = grad_gauss(x, mean_final, var_final/scaled_gamma)
+            gradx = grad_gauss(x, mean_final, var_gamma_ratio)
             t_old = x + gradx / 2
             z = torch.randn(x.shape, device=x.device)
             x = t_old + torch.sqrt(scaled_gamma)*z
-            gradx = grad_gauss(x, mean_final, var_final/scaled_gamma)
+            gradx = grad_gauss(x, mean_final, var_gamma_ratio)
             t_new = x + gradx / 2
             x_tot[:, k, :] = x
             y_tot[:, k, :] = y

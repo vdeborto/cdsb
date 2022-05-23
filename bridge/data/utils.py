@@ -18,6 +18,11 @@ def normalize_tensor(tensor):
     return normalized.clamp_(0, 1)
 
 
+def unnormalize_tensor(tensor):
+    unnormalized = (tensor - 0.5) * 2
+    return unnormalized.clamp_(-1, 1)
+
+
 def _list_image_files_recursively(data_dir):
     results = []
     for entry in sorted(os.listdir(data_dir)):

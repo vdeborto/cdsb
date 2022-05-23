@@ -237,6 +237,28 @@ def get_final_cond_model(accelerator, args, init_ds):
         print("Final cond model std:", std)
         final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
 
+    elif model_tag == 'PULSE':
+        from ..models.cond.pulse import PULSEModel
+        data_tag = args.data.dataset
+        task = data_tag.split("_")
+        assert task[0] == 'superres', "PULSE model only works for image superresolution tasks! "
+        factor = int(task[1])
+
+        mean_model = PULSEModel(args.data.image_size, args.data.image_size // factor)
+
+        mean_model = mean_model.eval()
+        mean_scale = args.cond_final_model.mean_scale
+        if args.cond_final_model.adaptive_std:
+            with torch.no_grad():
+                batch_x, batch_y = next(iter(DataLoader(init_ds, batch_size=NAPPROX, num_workers=args.num_workers,
+                                                        worker_init_fn=worker_init_fn)))
+                pred_x = mean_model(batch_y)
+                std = torch.std(batch_x - pred_x * mean_scale).item() * args.cond_final_model.std_scale
+        else:
+            std = args.cond_final_model.std_scale
+        print("Final cond model std:", std)
+        final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
+
     return final_cond_model
 
 

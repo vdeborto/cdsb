@@ -1,0 +1,63 @@
+# @package _global_
+
+# data
+Dataset: celebahq
+data:
+  dataset: "superres_8"
+  image_size: 128
+  channels: 3
+  random_flip: true
+y_cond: null
+x_cond_true: null
+
+
+# transfer
+transfer: False
+Dataset_transfer: mnist
+cond_final: False
+cond_final_model:
+  MODEL: PULSE
+  mean_scale: 1.
+  std_scale: 0.
+  adaptive_std: False
+
+
+adaptive_mean: False
+final_adaptive: False
+mean_final: torch.zeros([${data.channels}, ${data.image_size}, ${data.image_size}])
+var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size}])
+
+# device
+device: cuda
+num_workers: 8
+pin_memory: True
+
+# logging
+log_stride: 10
+gif_stride: 10000
+plot_npar: 100
+test_npar: 100
+
+# training
+cache_refresh_stride: 2500
+cache_npar: 256
+num_cache_batches: 20
+use_prev_net: True
+ema: True
+ema_rate: 0.999
+grad_clipping: True
+grad_clip: 1.0
+batch_size: 128
+num_iter: 50000
+n_ipf: 25
+lr: 0.0001
+
+# diffusion schedule
+num_steps: 10
+gamma_max: 0.005
+gamma_min: 0.00005
+gamma_space: linspace
+weight_distrib: False
+weight_distrib_alpha: 100
+fast_sampling: True
+

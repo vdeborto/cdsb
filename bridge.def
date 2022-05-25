@@ -1,0 +1,49 @@
+################# Header: Define the base system you want to use ################
+# Reference of the kind of base you want to use (e.g., docker, debootstrap, shub).
+Bootstrap: docker
+# Select the docker image you want to use 
+From: nvidia/cuda:11.3.0-cudnn8-devel-ubuntu18.04
+
+################# Section: Defining the system ################################# 
+# Commands in the %post section are executed within the container.
+%post
+    # Linux packages
+    apt -y update && \
+    apt install -y \
+    wget \
+    git \
+    unzip && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+    # Install conda
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3 && \
+    rm Miniconda3-latest-Linux-x86_64.sh
+    export PATH=$PATH:/opt/miniconda3/bin
+
+    # Install packages
+    conda install python=3.8
+    conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+    conda install scipy pandas scikit-learn tqdm matplotlib seaborn python-lmdb
+    conda install -c conda-forge pytorch-lightning hydra-core wandb gdown p7zip 
+    conda install -c fastai accelerate
+    pip install torch-fidelity tfrecord slurm-gpustat hydra-submitit-launcher
+
+    pip3 install openmim
+    mim install mmcv-full
+
+    git clone https://github.com/open-mmlab/mmediting.git
+    cd mmediting
+    pip3 install -e .
+    cd ..
+    rm -rf mmediting
+    
+
+
+# Environment variables that should be sourced at runtime.
+%environment
+    export SHELL=/bin/sh
+    export PATH=$PATH:/opt/miniconda3/bin
+    export LOCAL_TMP_DIR=/tmp
+    export LOCAL_SCRATCH_DIR=/scratch

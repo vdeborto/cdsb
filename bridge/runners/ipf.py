@@ -374,7 +374,7 @@ class IPFBase:
 
             if self.cond_final:
                 mean, std = self.final_cond_model(batch_y)
-                # batch_x = mean + std * torch.randn_like(init_batch_x)
+                mean, std = mean.detach(), std.detach()
 
                 if self.args.final_adaptive:
                     mean_final = mean
@@ -394,6 +394,7 @@ class IPFBase:
             if y_c is not None:
                 batch_y = y_c.to(batch_y.device) + torch.zeros_like(batch_y)
             mean, std = self.final_cond_model(batch_y)
+            mean, std = mean.detach(), std.detach()
             batch_x = mean + std * torch.randn_like(init_batch_x)
 
             if self.args.final_adaptive:
@@ -484,12 +485,11 @@ class IPFBase:
                 sample_net.eval()
                 step = i + self.num_iter * (n - 1)
 
-            with torch.no_grad():
-                self.set_seed(seed=0 + self.accelerator.process_index)
-                test_metrics = self.plotter(sample_net, i, n, fb)
+            self.set_seed(seed=0 + self.accelerator.process_index)
+            test_metrics = self.plotter(sample_net, i, n, fb)
 
-                if self.accelerator.is_main_process:
-                    self.save_logger.log_metrics(test_metrics, step=step)
+            if self.accelerator.is_main_process:
+                self.save_logger.log_metrics(test_metrics, step=step)
             return test_metrics
 
     def set_seed(self, seed=0):

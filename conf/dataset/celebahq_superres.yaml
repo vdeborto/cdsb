@@ -14,12 +14,12 @@ x_cond_true: null
 # transfer
 transfer: False
 Dataset_transfer: mnist
-cond_final: False
+cond_final: True
 cond_final_model:
-  MODEL: PULSE
+  MODEL: BasicCond
   mean_scale: 1.
-  std_scale: 0.
-  adaptive_std: False
+  std_scale: 1.
+  adaptive_std: True
 
 
 adaptive_mean: False
@@ -44,7 +44,7 @@ cache_npar: 256
 num_cache_batches: 20
 use_prev_net: True
 ema: True
-ema_rate: 0.999
+ema_rate: 0.9999
 grad_clipping: True
 grad_clip: 1.0
 batch_size: 128

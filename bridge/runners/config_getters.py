@@ -87,6 +87,8 @@ def get_models(args):
         else:
             if image_size == 256:
                 channel_mult = (1, 1, 2, 2, 4, 4)
+            elif image_size == 128:
+                channel_mult = (1, 2, 2, 4, 4)
             elif image_size == 64:
                 channel_mult = (1, 2, 2, 2)
             elif image_size == 32:
@@ -238,7 +240,7 @@ def get_final_cond_model(accelerator, args, init_ds):
         final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
 
     elif model_tag == 'PULSE':
-        from ..models.cond.pulse import PULSEModel
+        from bridge.models.cond.pulse import PULSEModel
         data_tag = args.data.dataset
         task = data_tag.split("_")
         assert task[0] == 'superres', "PULSE model only works for image superresolution tasks! "
@@ -368,11 +370,12 @@ def get_datasets(args):
             train_transform.insert(1, transforms.RandomHorizontalFlip())
 
         data_tag = args.data.dataset
-        root = data_dir
         if dataset_tag == DATASET_CELEBAHQ:
             name = 'celeba'
+            root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
             name = 'ffhq'
+            root = os.path.join(data_dir, "ffhq", "thumbnails128x128-lmdb")
         init_ds = Cond_LMDBDataset(data_tag, root, name=name, train=True, transform=cmp(train_transform))
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
@@ -453,11 +456,12 @@ def get_valid_test_datasets(args):
                           transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         data_tag = args.data.dataset
-        root = data_dir
         if dataset_tag == DATASET_CELEBAHQ:
             name = 'celeba'
+            root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
             name = 'ffhq'
+            root = os.path.join(data_dir, "ffhq", "thumbnails128x128-lmdb")
         test_ds = Cond_LMDBDataset(data_tag, root, name=name, train=False, transform=cmp(test_transform))
 
     return valid_ds, test_ds

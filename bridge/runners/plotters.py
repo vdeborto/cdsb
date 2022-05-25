@@ -177,40 +177,41 @@ class Plotter(object):
 
                 batch_x, batch_y, init_batch_x, mean_final, var_final = self.ipf.sample_batch(iter_dl, self.ipf.save_final_dl, fb)
 
-                if n == 0:
-                    assert fb == 'f'
-                    x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
-                else:
-                    x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, fb, sample=True, var_final=var_final)
+                with torch.no_grad():
+                    if n == 0:
+                        assert fb == 'f'
+                        x_tot, _, _, _ = self.ipf.langevin.record_init_langevin(batch_x, batch_y, mean_final=mean_final, var_final=var_final)
+                    else:
+                        x_tot, _, _, _ = self.ipf.langevin.record_langevin_seq(sample_net, batch_x, batch_y, fb, sample=True, var_final=var_final)
 
-                stop = time.time()
-                times.append(stop - start)
+                    stop = time.time()
+                    times.append(stop - start)
 
-                x_last = x_tot[:, -1]
-                self.plot_and_record_batch_joint(x_last, init_batch_x, iters, i, n, fb, dl_name=dl_name)
+                    x_last = x_tot[:, -1]
+                    self.plot_and_record_batch_joint(x_last, init_batch_x, iters, i, n, fb, dl_name=dl_name)
 
-                if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
-                    gather_batch_x = self.ipf.accelerator.gather(batch_x)
-                    gather_batch_y = self.ipf.accelerator.gather(batch_y)
-                    gather_x_tot = self.ipf.accelerator.gather(x_tot)
-                    gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
+                    if iters * self.ipf.test_batch_size < self.ipf.args.test_npar:
+                        gather_batch_x = self.ipf.accelerator.gather(batch_x)
+                        gather_batch_y = self.ipf.accelerator.gather(batch_y)
+                        gather_x_tot = self.ipf.accelerator.gather(x_tot)
+                        gather_init_batch_x = self.ipf.accelerator.gather(init_batch_x)
 
-                    if self.args.cond_final:
-                        mean_final = mean_final.expand_as(batch_x).clone()
-                        var_final = var_final.expand_as(batch_x).clone()
-                        gather_mean_final = self.ipf.accelerator.gather(mean_final)
-                        gather_var_final = self.ipf.accelerator.gather(var_final)
-
-                    if self.ipf.accelerator.is_main_process:
-                        all_batch_x.append(gather_batch_x.cpu())
-                        all_batch_y.append(gather_batch_y.cpu())
-                        all_x_tot.append(gather_x_tot.cpu())
-                        all_init_batch_x.append(gather_init_batch_x.cpu())
                         if self.args.cond_final:
-                            all_mean_final.append(gather_mean_final.cpu())
-                            all_var_final.append(gather_var_final.cpu())
+                            mean_final = mean_final.expand_as(batch_x).clone()
+                            var_final = var_final.expand_as(batch_x).clone()
+                            gather_mean_final = self.ipf.accelerator.gather(mean_final)
+                            gather_var_final = self.ipf.accelerator.gather(var_final)
 
-                iters = iters + 1
+                        if self.ipf.accelerator.is_main_process:
+                            all_batch_x.append(gather_batch_x.cpu())
+                            all_batch_y.append(gather_batch_y.cpu())
+                            all_x_tot.append(gather_x_tot.cpu())
+                            all_init_batch_x.append(gather_init_batch_x.cpu())
+                            if self.args.cond_final:
+                                all_mean_final.append(gather_mean_final.cpu())
+                                all_var_final.append(gather_var_final.cpu())
+
+                    iters = iters + 1
 
             except StopIteration:
                 break

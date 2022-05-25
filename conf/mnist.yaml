@@ -20,7 +20,7 @@ CSV_log_dir: ./
 optimizer: Adam
 cache_cpu: True
 test_batch_size: 200
-plot_level: 3
+plot_level: 2
 mean_match: True
 paths: 
   experiments_dir_name: experiments

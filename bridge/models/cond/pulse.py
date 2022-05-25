@@ -25,7 +25,8 @@ class PULSEModel(nn.Module):
             "learning_rate": 0.4,
             "steps": 100,
             "lr_schedule": 'linear1cycledrop',
-            "batch_size": 1
+            "batch_size": 16,
+            "save_intermediate": False
         }
 
     def forward(self, x):
@@ -35,8 +36,8 @@ class PULSEModel(nn.Module):
         out = []
 
         for batch in dataloader:
-            HR, _ = self.model(batch, **self.kwargs)
-            out.append(HR.cpu().detach().clamp(0, 1))
+            (HR, _), = self.model(batch, **self.kwargs)
+            out.append(HR.detach().clamp(0, 1))
         out = torch.cat(out, dim=0)
         out = torch.nn.functional.interpolate(out, (self.hr_size, self.hr_size))
         out = unnormalize_tensor(out)

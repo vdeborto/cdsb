@@ -135,3 +135,5 @@ experiments/
 /data/
 
 /slurm/
+
+slurm*.sh

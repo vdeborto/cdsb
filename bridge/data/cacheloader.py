@@ -13,10 +13,10 @@ def CacheLoader(fb, sample_net, dataloader_b, dataloader_f, num_batches, langevi
 
     sample_direction = 'f' if fb == 'b' else 'b'
 
-    with torch.no_grad():
-        for b in range(num_batches):
-            batch_x, batch_y, _, mean_final, var_final = ipf.sample_batch(dataloader_b, dataloader_f, sample_direction)
+    for b in range(num_batches):
+        batch_x, batch_y, _, mean_final, var_final = ipf.sample_batch(dataloader_b, dataloader_f, sample_direction)
 
+        with torch.no_grad():
             if (n == 1) & (fb == 'b'):
                 x, y, out, steps_expanded = langevin.record_init_langevin(batch_x, batch_y,
                                                                           mean_final=mean_final,

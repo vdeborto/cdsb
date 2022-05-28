@@ -559,7 +559,7 @@ class IPFSequential(IPFBase):
         else:
             checkpoint_iter = 1
 
-        for i in tqdm(range(checkpoint_iter, self.num_iter + 1)):
+        for i in tqdm(range(checkpoint_iter, self.num_iter + 1), miniters=self.stride_log):
             self.net[forward_or_backward].train()
 
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)
@@ -866,7 +866,7 @@ class IPFRegression:
     def train(self):
         self.accelerate()
 
-        for i in tqdm(range(1, self.num_iter + 1)):
+        for i in tqdm(range(1, self.num_iter + 1), miniters=self.stride_log):
             self.net.train()
 
             self.set_seed(seed=i + self.accelerator.process_index)

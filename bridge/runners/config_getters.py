@@ -8,7 +8,6 @@ from ..data.one_dim_rev_cond import one_dim_rev_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
-from ..data.celeba import Cond_CelebA
 from ..data.lmdb_dataset import Cond_LMDBDataset
 from .plotters import *
 from torch.utils.data import TensorDataset
@@ -351,7 +350,7 @@ def get_datasets(args):
 
         data_tag = args.data.dataset
         root = data_dir
-        init_ds = Cond_CelebA(data_tag, root, split='train', transform=cmp(train_transform), download=False)
+        init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='train', transform=cmp(train_transform))
 
     # MNIST DATASET
 
@@ -371,12 +370,10 @@ def get_datasets(args):
 
         data_tag = args.data.dataset
         if dataset_tag == DATASET_CELEBAHQ:
-            name = 'celeba'
             root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
-            name = 'ffhq'
             root = os.path.join(data_dir, "ffhq", "thumbnails128x128-lmdb")
-        init_ds = Cond_LMDBDataset(data_tag, root, name=name, train=True, transform=cmp(train_transform))
+        init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split="train", transform=cmp(train_transform))
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
 
@@ -446,8 +443,8 @@ def get_valid_test_datasets(args):
 
         data_tag = args.data.dataset
         root = data_dir
-        valid_ds = Cond_CelebA(data_tag, root, split='valid', transform=cmp(test_transform), download=False)
-        test_ds = Cond_CelebA(data_tag, root, split='test', transform=cmp(test_transform), download=False)
+        valid_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='validation', transform=cmp(test_transform))
+        test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='test', transform=cmp(test_transform))
 
     # CELEBAHQ, FFHQ DATASET
 
@@ -457,12 +454,10 @@ def get_valid_test_datasets(args):
 
         data_tag = args.data.dataset
         if dataset_tag == DATASET_CELEBAHQ:
-            name = 'celeba'
             root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
-            name = 'ffhq'
             root = os.path.join(data_dir, "ffhq", "thumbnails128x128-lmdb")
-        test_ds = Cond_LMDBDataset(data_tag, root, name=name, train=False, transform=cmp(test_transform))
+        test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split="validation", transform=cmp(test_transform))
 
     return valid_ds, test_ds
 

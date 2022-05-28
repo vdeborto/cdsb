@@ -137,3 +137,7 @@ experiments/
 /slurm/
 
 slurm*.sh
+
+bridge.sif
+
+sylabs-token

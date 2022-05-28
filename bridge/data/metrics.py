@@ -1,5 +1,6 @@
 import torch
-from torchmetrics.image import PSNR as _PSNR, SSIM as _SSIM, FID as _FID
+from torchmetrics import PeakSignalNoiseRatio as _PSNR, StructuralSimilarityIndexMeasure as _SSIM
+from torchmetrics.image.fid import FrechetInceptionDistance as _FID
 
 
 class PSNR(_PSNR):

@@ -7,28 +7,34 @@ import lmdb
 from PIL import Image
 
 
-def num_samples(dataset, train):
+def num_samples(dataset, split):
     if dataset == 'celeba':
-        return 27000 if train else 3000
-    elif dataset == 'celeba64':
-        return 162770 if train else 19867
-    elif dataset == 'imagenet-oord':
-        return 1281147 if train else 50000
+        if split == "train":
+            return 162770
+        elif split == "validation":
+            return 19867
+        elif split == "test":
+            return 19962
+    elif dataset == 'celebahq':
+        if split == "train":
+            return 27000
+        elif split == "validation":
+            return 3000
     elif dataset == 'ffhq':
-        return 63000 if train else 7000
+        if split == "train":
+            return 63000
+        elif split == "validation":
+            return 7000
     else:
         raise NotImplementedError('dataset %s is unknown' % dataset)
 
 
 class LMDBDataset(Dataset):
-    def __init__(self, root, name='', train=True, transform=None, is_encoded=False):
-        self.train = train
+    def __init__(self, root, name='', split="train", transform=None, is_encoded=False):
+        self.split = split
         self.name = name
         self.transform = transform
-        if self.train:
-            lmdb_path = os.path.join(root, 'train.lmdb')
-        else:
-            lmdb_path = os.path.join(root, 'validation.lmdb')
+        lmdb_path = os.path.join(root, self.split + '.lmdb')
         self.data_lmdb = lmdb.open(lmdb_path, readonly=True, max_readers=1,
                                    lock=False, readahead=False, meminit=False)
         self.is_encoded = is_encoded
@@ -57,12 +63,12 @@ class LMDBDataset(Dataset):
         return img, target
 
     def __len__(self):
-        return num_samples(self.name, self.train)
+        return num_samples(self.name, self.split)
 
 
 class Cond_LMDBDataset(LMDBDataset):
-    def __init__(self, data_tag, root, name, train=True, transform=None):
-        super().__init__(root, name=name, train=train, transform=transform)
+    def __init__(self, data_tag, root, name, split="train", transform=None):
+        super().__init__(root, name=name, split=split, transform=transform)
 
         self.data_tag = data_tag
 
@@ -82,6 +88,16 @@ class Cond_LMDBDataset(LMDBDataset):
                     Y = Y + torch.randn_like(Y) * std
 
             Y = torch.nn.functional.interpolate(Y, (imageSize, imageSize)).squeeze(0)
+
+        elif task[0] == 'inpaint':
+            mask = torch.zeros([1, imageSize, imageSize])
+            if task[1] == 'center':
+                mask[:, imageSize//4:-imageSize//4, imageSize//4:-imageSize//4] = 1
+            elif task[1] == 'left':
+                mask[:, :, :imageSize//2] = 1
+            elif task[1] == 'right':
+                mask[:, :, imageSize//2:] = 1
+            Y = X * (1 - mask)
 
         else:
             raise NotImplementedError

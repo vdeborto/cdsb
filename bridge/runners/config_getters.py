@@ -349,7 +349,7 @@ def get_datasets(args):
             train_transform.insert(2, transforms.RandomHorizontalFlip())
 
         data_tag = args.data.dataset
-        root = data_dir
+        root = os.path.join(data_dir, "celeba", "celeba-lmdb")
         init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='train', transform=cmp(train_transform))
 
     # MNIST DATASET
@@ -442,7 +442,7 @@ def get_valid_test_datasets(args):
                           transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         data_tag = args.data.dataset
-        root = data_dir
+        root = os.path.join(data_dir, "celeba", "celeba-lmdb")
         valid_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='validation', transform=cmp(test_transform))
         test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='test', transform=cmp(test_transform))
 

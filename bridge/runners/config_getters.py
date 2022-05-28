@@ -350,7 +350,7 @@ def get_datasets(args):
 
         data_tag = args.data.dataset
         root = os.path.join(data_dir, "celeba", "celeba-lmdb")
-        init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='train', transform=cmp(train_transform))
+        init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='train', transform=cmp(train_transform), is_encoded=True)
 
     # MNIST DATASET
 
@@ -443,8 +443,8 @@ def get_valid_test_datasets(args):
 
         data_tag = args.data.dataset
         root = os.path.join(data_dir, "celeba", "celeba-lmdb")
-        valid_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='validation', transform=cmp(test_transform))
-        test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='test', transform=cmp(test_transform))
+        valid_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='validation', transform=cmp(test_transform), is_encoded=True)
+        test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='test', transform=cmp(test_transform), is_encoded=True)
 
     # CELEBAHQ, FFHQ DATASET
 

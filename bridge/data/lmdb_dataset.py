@@ -67,8 +67,8 @@ class LMDBDataset(Dataset):
 
 
 class Cond_LMDBDataset(LMDBDataset):
-    def __init__(self, data_tag, root, name, split="train", transform=None):
-        super().__init__(root, name=name, split=split, transform=transform)
+    def __init__(self, data_tag, root, name, split="train", transform=None, is_encoded=False):
+        super().__init__(root, name=name, split=split, transform=transform, is_encoded=is_encoded)
 
         self.data_tag = data_tag
 

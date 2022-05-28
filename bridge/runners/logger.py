@@ -1,4 +1,4 @@
-from pytorch_lightning.loggers import CSVLogger as _CSVLogger, NeptuneLogger, TensorBoardLogger, WandbLogger as _WandbLogger
+from pytorch_lightning.loggers import CSVLogger as _CSVLogger, WandbLogger as _WandbLogger
 import wandb
 
 class Logger:
@@ -39,5 +39,8 @@ class WandbLogger(_WandbLogger):
             if len(v) != n:
                 raise ValueError(f"Expected {n} items but only found {len(v)} for {k}")
         kwarg_list = [{k: kwargs[k][i] for k in kwargs.keys()} for i in range(n)]
-        metrics = {key: [wandb.Image(img, **kwarg) for img, kwarg in zip(images, kwarg_list)]}
+        if n == 1:
+            metrics = {key: wandb.Image(images[0], **kwarg_list[0])}
+        else:
+            metrics = {key: [wandb.Image(img, **kwarg) for img, kwarg in zip(images, kwarg_list)]}
         self.log_metrics(metrics, step=step, fb=fb)

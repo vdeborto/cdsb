@@ -22,3 +22,15 @@
 	path = gitmodules/mmediting
 	url = https://github.com/open-mmlab/mmediting.git
 	ignore = dirty
+[submodule "gitmodules/HD-CelebA-Cropper"]
+	path = gitmodules/HD-CelebA-Cropper
+	url = https://github.com/LynnHo/HD-CelebA-Cropper.git
+	ignore = dirty
+[submodule "gitmodules/SRFlow"]
+	path = gitmodules/SRFlow
+	url = https://github.com/andreas128/SRFlow.git
+	ignore = dirty
+[submodule "gitmodules/matlab_imresize"]
+	path = gitmodules/matlab_imresize
+	url = https://github.com/fatheral/matlab_imresize.git
+	ignore = dirty

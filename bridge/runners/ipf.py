@@ -64,7 +64,7 @@ class IPFBase:
         self.accelerator.print("T:", self.T.item())
 
         # get models
-        self.first_pass = True
+        self.first_pass = True  # Load and use checkpointed networks during first pass
         self.build_models()
         self.build_ema()
 
@@ -100,10 +100,6 @@ class IPFBase:
             if self.data_epochs < 1:
                 warnings.warn(
                     "Data epochs < 1, increase num_iter, cache_npar, num_cache_batches, or decrease npar, cache_refresh_stride. ")
-
-        # # checkpoint
-        # date = str(datetime.datetime.now())[0:10]
-        # self.name_all = date
 
         # run from checkpoint
         self.checkpoint_run = self.args.checkpoint_run
@@ -227,8 +223,6 @@ class IPFBase:
     def build_ema(self):
         if self.args.ema:
             self.ema_helpers = {}
-            self.update_ema('f')
-            self.update_ema('b')
 
             if self.first_pass and self.args.checkpoint_run:
                 # sample network
@@ -238,11 +232,13 @@ class IPFBase:
                     sample_net_f.load_state_dict(
                         torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_f)))
                     sample_net_f = sample_net_f.to(self.device)
+                    self.update_ema('f')
                     self.ema_helpers['f'].register(sample_net_f)
                 if self.args.sample_checkpoint_b is not None:
                     sample_net_b.load_state_dict(
                         torch.load(hydra.utils.to_absolute_path(self.args.sample_checkpoint_b)))
                     sample_net_b = sample_net_b.to(self.device)
+                    self.update_ema('b')
                     self.ema_helpers['b'].register(sample_net_b)
 
     def build_optimizers(self, forward_or_backward=None):
@@ -313,10 +309,13 @@ class IPFBase:
         return sample_net
 
     def new_cacheloader(self, forward_or_backward, n):
-        sample_direction = 'f' if forward_or_backward == 'b' else 'b'
-        sample_net = self.get_sample_net(sample_direction)
-        sample_net = sample_net.to(self.device)
-        sample_net.eval()
+        if (n == 1) & (forward_or_backward == 'b'):
+            sample_net = None
+        else:
+            sample_direction = 'f' if forward_or_backward == 'b' else 'b'
+            sample_net = self.get_sample_net(sample_direction)
+            sample_net = sample_net.to(self.device)
+            sample_net.eval()
 
         if forward_or_backward == 'b':
             new_ds = CacheLoader('b',
@@ -530,17 +529,11 @@ class IPFSequential(IPFBase):
                 name_opt = 'optimizer' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                 name_opt_ckpt = os.path.join(self.ckpt_dir, name_opt)
                 torch.save(self.optimizer[fb].optimizer.state_dict(), name_opt_ckpt)
-                # if self.args.LOGGER == 'Wandb':
-                #     import wandb
-                #     wandb.save(name_net_ckpt)
 
                 if self.args.ema:
                     name_net = 'sample_net' + '_' + fb + '_' + str(n) + "_" + str(i) + '.ckpt'
                     name_net_ckpt = os.path.join(self.ckpt_dir, name_net)
                     torch.save(sample_net.state_dict(), name_net_ckpt)
-                    # if self.args.LOGGER == 'Wandb':
-                    #     import wandb
-                    #     wandb.save(name_net_ckpt)
 
             self.plot_and_test_step(i, n, fb)
 
@@ -549,17 +542,19 @@ class IPFSequential(IPFBase):
 
         if (not self.first_pass) and (not self.args.use_prev_net):
             self.build_models(forward_or_backward)
-            self.update_ema(forward_or_backward)
             self.build_optimizers(forward_or_backward)
 
         self.accelerate(forward_or_backward)
+
+        if (forward_or_backward not in self.ema_helpers.keys()) or ((not self.first_pass) and (not self.args.use_prev_net)):
+            self.update_ema(forward_or_backward)
 
         if self.first_pass:
             checkpoint_iter = self.checkpoint_iter
         else:
             checkpoint_iter = 1
 
-        for i in tqdm(range(checkpoint_iter, self.num_iter + 1), mininterval=10):
+        for i in tqdm(range(checkpoint_iter, self.num_iter + 1), mininterval=30):
             self.net[forward_or_backward].train()
 
             self.set_seed(seed=n * self.num_iter + i + self.accelerator.process_index)
@@ -722,10 +717,13 @@ class IPFRegression:
 
         # get models
         self.build_model()
-        self.build_ema()
 
         # get optims
         self.build_optimizer()
+
+        self.accelerate()
+
+        self.build_ema()
 
         # get loggers
         self.logger = self.get_logger('reg_train_logs')
@@ -864,9 +862,7 @@ class IPFRegression:
         return sample_net
 
     def train(self):
-        self.accelerate()
-
-        for i in tqdm(range(1, self.num_iter + 1), mininterval=10):
+        for i in tqdm(range(1, self.num_iter + 1), mininterval=30):
             self.net.train()
 
             self.set_seed(seed=i + self.accelerator.process_index)

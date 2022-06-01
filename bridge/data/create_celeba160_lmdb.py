@@ -28,23 +28,34 @@ def main(split, img_path, lmdb_path):
         file_ind = np.arange(num_train + num_valid, num_images)
     lmdb_path = os.path.join(lmdb_path, '%s.lmdb' % split)
 
+    print(file_ind)
+
     # create lmdb
     env = lmdb.open(lmdb_path, map_size=1e12)
     count = 0
-    with env.begin(write=True) as txn:
-        for i in file_ind:
-            im = Image.open(os.path.join(img_path, '%06d.png' % (i + 1)))
-            # im = im.resize(size=(256, 256), resample=Image.BILINEAR)
-            im = np.array(im.getdata(), dtype=np.uint8).reshape(im.size[1], im.size[0], 3)
+    txn = env.begin(write=True)
+    for i in file_ind:
+        im = Image.open(os.path.join(img_path, '%06d.png' % (i + 1)))
+        # im = im.resize(size=(256, 256), resample=Image.BILINEAR)
+        im = np.array(im.getdata(), dtype=np.uint8).reshape(im.size[1], im.size[0], 3)
 
-            im = imresize(im, output_shape=(160, 160))
+        im = imresize(im, output_shape=(160, 160))
 
-            txn.put(str(count).encode(), np.ascontiguousarray(im))
-            count += 1
-            if count % 100 == 0:
-                print(count)
+        txn.put(str(count).encode(), np.ascontiguousarray(im))
+        count += 1
 
-        print('added %d items to the LMDB dataset.' % count)
+        if count % 100 == 0:
+            print(count)
+            sys.stdout.flush()
+
+        if count % 5000 == 0:
+            txn.commit()
+            txn = env.begin(write=True)
+
+    txn.commit()
+    env.close()
+
+    print('added %d items to the LMDB dataset.' % count)
 
 
 if __name__ == '__main__':

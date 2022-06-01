@@ -9,7 +9,7 @@ import torch
 import torchvision.utils as vutils
 from . import repeater
 from ..data.utils import save_image, to_uint8_tensor, normalize_tensor
-from ..data.metrics import PSNR, SSIM, FID
+from ..data.metrics import PSNR, SSIM, FID, LPIPS
 from PIL import Image
 # matplotlib.use('Agg')
 from scipy.stats import kde, gamma, norm, lognorm
@@ -423,7 +423,8 @@ class ImPlotter(Plotter):
 
         self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
                              "ssim": SSIM(data_range=255.).to(self.ipf.device),
-                             "fid": FID().to(self.ipf.device)}
+                             "fid": FID().to(self.ipf.device),
+                             "lpips": LPIPS().to(self.ipf.device)}
 
     def plot_sequence_joint(self, x_start, y_start, x_tot, x_init, data, i, n, fb, dl_name='train', freq=None,
                             mean_final=None, var_final=None):
@@ -1260,7 +1261,8 @@ class BasicImPlotter(BasicPlotter):
 
         self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
                              "ssim": SSIM(data_range=255.).to(self.ipf.device),
-                             "fid": FID().to(self.ipf.device)}
+                             "fid": FID().to(self.ipf.device),
+                             "lpips": LPIPS().to(self.ipf.device)}
 
     def plot_joint(self, y_start, x_last, x_init, data, i, dl_name='train'):
         super().plot_joint(y_start, x_last, x_init, data, i, dl_name=dl_name)

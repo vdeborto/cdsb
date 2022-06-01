@@ -13,6 +13,11 @@ def to_uint8_tensor(tensor):
     return normalized.mul(255).add_(0.5).clamp_(0, 255).to(torch.uint8)
 
 
+def from_uint8_tensor(tensor):
+    normalized = tensor.float() / 255
+    return unnormalize_tensor(normalized)
+
+
 def normalize_tensor(tensor):
     normalized = tensor / 2 + 0.5
     return normalized.clamp_(0, 1)

@@ -15,11 +15,6 @@ x_cond_true: null
 transfer: False
 Dataset_transfer: mnist
 cond_final: True
-cond_final_model:
-  MODEL: BasicCond
-  mean_scale: 1.
-  std_scale: 1.
-  adaptive_std: True
 
 
 adaptive_mean: False

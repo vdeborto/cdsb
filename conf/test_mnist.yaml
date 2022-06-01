@@ -6,6 +6,7 @@ defaults:
   - test_job
   - dataset: mnist_superres #celeba, 2d, stackedmnist
   - model: SuperResUNET #Basic, UNET
+  - cond_final_model: BasicCond
   - override hydra/launcher: submitit_slurm
 
 name: ${Dataset}_${data.dataset}

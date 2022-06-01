@@ -59,6 +59,7 @@ class LMDBDataset(Dataset):
                 img = img.convert('RGB')
             else:
                 img = np.asarray(data, dtype=np.uint8).reshape((self.size, self.size, 3))
+                img = Image.fromarray(img, mode='RGB')
 
         if self.transform is not None:
             img = self.transform(img)

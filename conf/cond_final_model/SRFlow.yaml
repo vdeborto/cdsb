@@ -1,0 +1,9 @@
+# @package _global_
+
+cond_final_model:
+    MODEL: SRFlow
+    mean_scale: 1.
+    std_scale: 0.
+    adaptive_std: False
+    conf_path: gitmodules/SRFlow/code/confs/SRFlow_CelebA_8X.yml
+    temperature: 0.8

@@ -247,7 +247,8 @@ def get_final_cond_model(accelerator, args, init_ds):
 
         if model_tag == 'SRFlow':
             from bridge.models.cond.srflow import SRFlowModel
-            mean_model = SRFlowModel(hydra.utils.to_absolute_path(args.cond_final_model.conf_path), args.cond_final_model.temperature)
+            mean_model = SRFlowModel(args.data.image_size, args.data.image_size // factor,
+                                     hydra.utils.to_absolute_path(args.cond_final_model.conf_path), accelerator.device, args.cond_final_model.temperature)
         elif model_tag == 'PULSE':
             from bridge.models.cond.pulse import PULSEModel
             mean_model = PULSEModel(args.data.image_size, args.data.image_size // factor)

@@ -389,7 +389,7 @@ def get_datasets(args):
         if dataset_tag == DATASET_CELEBAHQ:
             root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
-            root = os.path.join(data_dir, "ffhq", "images256x256-lmdb-lmdb")
+            root = os.path.join(data_dir, "ffhq", "images256x256-lmdb")
         init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split="train", transform=cmp(train_transform))
 
     # FINAL (GAUSSIAN) DATASET (if no transfer)
@@ -482,7 +482,7 @@ def get_valid_test_datasets(args):
         if dataset_tag == DATASET_CELEBAHQ:
             root = os.path.join(data_dir, "celebahq", "celeba-lmdb")
         else:
-            root = os.path.join(data_dir, "ffhq", "images256x256-lmdb-lmdb")
+            root = os.path.join(data_dir, "ffhq", "images256x256-lmdb")
         test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split="validation", transform=cmp(test_transform))
 
     return valid_ds, test_ds

@@ -238,14 +238,19 @@ def get_final_cond_model(accelerator, args, init_ds):
         print("Final cond model std:", std)
         final_cond_model = BasicRegressGaussian(mean_model, mean_scale, std)
 
-    elif model_tag == 'PULSE':
-        from bridge.models.cond.pulse import PULSEModel
+    # Stochastic p_ref
+    elif model_tag in ['SRFlow', 'PULSE']:
         data_tag = args.data.dataset
         task = data_tag.split("_")
         assert task[0] == 'superres', "PULSE model only works for image superresolution tasks! "
         factor = int(task[1])
 
-        mean_model = PULSEModel(args.data.image_size, args.data.image_size // factor)
+        if model_tag == 'SRFlow':
+            from bridge.models.cond.srflow import SRFlowModel
+            mean_model = SRFlowModel(hydra.utils.to_absolute_path(args.cond_final_model.conf_path), args.cond_final_model.temperature)
+        elif model_tag == 'PULSE':
+            from bridge.models.cond.pulse import PULSEModel
+            mean_model = PULSEModel(args.data.image_size, args.data.image_size // factor)
 
         mean_model = mean_model.eval()
         mean_scale = args.cond_final_model.mean_scale

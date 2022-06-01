@@ -1,10 +1,10 @@
 # @package _global_
 
 # data
-Dataset: celebahq
+Dataset: celeba160
 data:
   dataset: "superres_8"
-  image_size: 128
+  image_size: 160
   channels: 3
   random_flip: true
 y_cond: null
@@ -29,13 +29,13 @@ var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size
 
 # device
 device: cuda
-num_workers: 8
+num_workers: 16
 pin_memory: True
 
 # logging
 log_stride: 100
 gif_stride: 10000
-plot_npar: 100
+plot_npar: 1000
 test_npar: 100
 
 # training
@@ -53,7 +53,7 @@ n_ipf: 25
 lr: 0.0001
 
 # diffusion schedule
-num_steps: 10
+num_steps: 20
 gamma_max: 0.005
 gamma_min: 0.00005
 gamma_space: linspace

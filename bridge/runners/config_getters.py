@@ -8,7 +8,7 @@ from ..data.one_dim_rev_cond import one_dim_rev_cond_ds
 from ..data.five_dim_cond import five_dim_cond_ds
 from ..data.lorenz import lorenz_process, lorenz_ds
 from ..data.stackedmnist import Cond_Stacked_MNIST
-from ..data.lmdb_dataset import Cond_LMDBDataset
+from ..data.lmdb_dataset import Cond_LMDBDataset, Cond_CelebA160
 from .plotters import *
 from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
@@ -35,7 +35,7 @@ def get_plotter(runner, args):
         return FiveDCondPlotter(runner, args)
     elif dataset_tag == DATASET_BIOCHEMICAL:
         return BiochemicalPlotter(runner, args)
-    elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBAHQ, DATASET_FFHQ]:
+    elif dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBA160, DATASET_CELEBAHQ, DATASET_FFHQ]:
         return ImPlotter(runner, args)
     else:
         return Plotter(runner, args)
@@ -43,7 +43,7 @@ def get_plotter(runner, args):
 
 def get_cond_plotter(runner, args):
     dataset_tag = getattr(args, DATASET)
-    if dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBAHQ, DATASET_FFHQ]:
+    if dataset_tag in [DATASET_STACKEDMNIST, DATASET_CELEBA, DATASET_CELEBA160, DATASET_CELEBAHQ, DATASET_FFHQ]:
         return BasicImPlotter(runner, args)
     else:
         return BasicPlotter(runner, args)
@@ -86,8 +86,8 @@ def get_models(args):
         else:
             if image_size == 256:
                 channel_mult = (1, 1, 2, 2, 4, 4)
-            elif image_size == 128:
-                channel_mult = (1, 2, 2, 4, 4)
+            elif image_size == 160:
+                channel_mult = (1, 2, 2, 4)
             elif image_size == 64:
                 channel_mult = (1, 2, 2, 2)
             elif image_size == 32:
@@ -287,6 +287,7 @@ DATASET_5D_COND = '5d_cond'
 DATASET_BIOCHEMICAL = 'biochemical'
 DATASET_LORENZ = 'lorenz'
 DATASET_CELEBA = 'celeba'
+DATASET_CELEBA160 = 'celeba160'
 DATASET_STACKEDMNIST = 'stackedmnist'
 DATASET_CELEBAHQ = 'celebahq'
 DATASET_FFHQ = 'ffhq'
@@ -350,7 +351,17 @@ def get_datasets(args):
 
         data_tag = args.data.dataset
         root = os.path.join(data_dir, "celeba", "celeba-lmdb")
-        init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='train', transform=cmp(train_transform), is_encoded=True)
+        init_ds = Cond_LMDBDataset(data_tag, root, name="celeba", split='train', transform=cmp(train_transform), is_encoded=True)
+
+    if dataset_tag == DATASET_CELEBA160:
+        assert args.data.image_size == 160
+        train_transform = [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        if args.data.random_flip:
+            train_transform.insert(0, transforms.RandomHorizontalFlip())
+
+        data_tag = args.data.dataset
+        root = os.path.join(data_dir, "celeba160", "celeba-lmdb")
+        init_ds = Cond_CelebA160(data_tag, root, name="celeba", split='train', transform=cmp(train_transform))
 
     # MNIST DATASET
 
@@ -443,8 +454,17 @@ def get_valid_test_datasets(args):
 
         data_tag = args.data.dataset
         root = os.path.join(data_dir, "celeba", "celeba-lmdb")
-        valid_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='validation', transform=cmp(test_transform), is_encoded=True)
-        test_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split='test', transform=cmp(test_transform), is_encoded=True)
+        valid_ds = Cond_LMDBDataset(data_tag, root, name="celeba", split='validation', transform=cmp(test_transform), is_encoded=True)
+        test_ds = Cond_LMDBDataset(data_tag, root, name="celeba", split='test', transform=cmp(test_transform), is_encoded=True)
+
+    if dataset_tag == DATASET_CELEBA160:
+        assert args.data.image_size == 160
+        test_transform = [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+        data_tag = args.data.dataset
+        root = os.path.join(data_dir, "celeba160", "celeba-lmdb")
+        valid_ds = Cond_CelebA160(data_tag, root, name="celeba", split='validation', transform=cmp(test_transform))
+        test_ds = Cond_CelebA160(data_tag, root, name="celeba", split='test', transform=cmp(test_transform))
 
     # CELEBAHQ, FFHQ DATASET
 

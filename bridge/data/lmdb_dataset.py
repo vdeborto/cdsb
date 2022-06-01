@@ -3,8 +3,12 @@ import io
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 import lmdb
 from PIL import Image
+
+from .utils import to_uint8_tensor
+from gitmodules.matlab_imresize.imresize import imresize
 
 
 def num_samples(dataset, split):
@@ -55,7 +59,6 @@ class LMDBDataset(Dataset):
                 img = img.convert('RGB')
             else:
                 img = np.asarray(data, dtype=np.uint8).reshape((self.size, self.size, 3))
-                img = Image.fromarray(img, mode='RGB')
 
         if self.transform is not None:
             img = self.transform(img)
@@ -98,6 +101,31 @@ class Cond_LMDBDataset(LMDBDataset):
             elif task[1] == 'right':
                 mask[:, :, imageSize//2:] = 1
             Y = X * (1 - mask)
+
+        else:
+            raise NotImplementedError
+
+        return X, Y
+
+
+class Cond_CelebA160(LMDBDataset):
+    def __init__(self, data_tag, root, name, split="train", transform=None, is_encoded=False):
+        super().__init__(root, name=name, split=split, transform=transform, is_encoded=is_encoded)
+        assert self.size == 160
+        self.data_tag = data_tag
+        self.np_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    def __getitem__(self, item):
+        X, _ = super().__getitem__(item)
+        imageSize = X.shape[-1]
+        X_np = to_uint8_tensor(X).numpy().transpose((1, 2, 0))
+
+        task = self.data_tag.split("_")
+        if task[0] == 'superres':
+            factor = int(task[1])
+            Y_np = imresize(X_np, output_shape=(imageSize // factor, imageSize // factor))
+            Y = self.np_transform(Y_np).unsqueeze(0)
+            Y = torch.nn.functional.interpolate(Y, (imageSize, imageSize)).squeeze(0)
 
         else:
             raise NotImplementedError

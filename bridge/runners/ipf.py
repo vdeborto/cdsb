@@ -163,7 +163,7 @@ class IPFBase:
                 self.x_cond_true = torch.stack(self.x_cond_true, dim=0)
 
         self.cond_final = self.args.cond_final
-        assert (not self.transfer or not self.cond_final)
+
         if self.cond_final:
             self.final_cond_model = final_cond_model.to(self.device).eval()
 
@@ -275,7 +275,7 @@ class IPFBase:
             self.save_test_dl = self.accelerator.prepare(self.save_test_dl)
             self.save_dls_dict["test"] = self.save_test_dl
 
-        if self.transfer:
+        if self.final_ds is not None:
             self.cache_final_dl = DataLoader(self.final_ds, batch_size=self.cache_npar, shuffle=True, **self.kwargs)
             self.cache_final_dl = self.accelerator.prepare(self.cache_final_dl)
             self.cache_final_dl = repeater(self.cache_final_dl)
@@ -380,7 +380,7 @@ class IPFBase:
                     std_final = std
                 elif self.args.adaptive_mean:
                     mean_final = mean
-        elif self.transfer:
+        elif self.final_ds is not None:
             batch = next(final_dl)
             batch_x = batch[0]
             init_batch = next(init_dl)

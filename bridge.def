@@ -41,4 +41,4 @@ From: nvidia/cuda:11.3.0-cudnn8-devel-ubuntu18.04
     rm -rf mmediting
 
     echo ". /opt/miniconda3/etc/profile.d/conda.sh" >> $SINGULARITY_ENVIRONMENT
-    echo "conda activate bridge" >> $SINGULARITY_ENVIRONMENT
+    echo "conda activate /opt/miniconda3/envs/bridge" >> $SINGULARITY_ENVIRONMENT

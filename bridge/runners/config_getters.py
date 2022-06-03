@@ -392,24 +392,22 @@ def get_datasets(args):
             root = os.path.join(data_dir, "ffhq", "images256x256-lmdb")
         init_ds = Cond_LMDBDataset(data_tag, root, name=dataset_tag, split="train", transform=cmp(train_transform))
 
-    # FINAL (GAUSSIAN) DATASET (if no transfer)
+    # FINAL DATASET
 
     final_ds, mean_final, var_final = get_final_dataset(args, init_ds)
     return init_ds, final_ds, mean_final, var_final
 
 
 def get_final_dataset(args, init_ds):
-    dataset_tag = getattr(args, DATASET)
     if args.transfer:
-        dataset_transfer_tag = getattr(args, DATASET_TRANSFER)
+        mean_final = torch.tensor(0.)
+        var_final = torch.tensor(1.*10**3)  # infty like
+        if args.cond_final:
+            final_ds = None
+        else:
+            raise NotImplementedError
     else:
-        dataset_transfer_tag = None
-
-    data_dir = hydra.utils.to_absolute_path(args.paths.data_dir_name)
-
-
-    # FINAL (GAUSSIAN) DATASET (if no transfer)
-    if not args.transfer:
+        # FINAL (GAUSSIAN) DATASET (if no transfer)
         if args.cond_final:
             if args.adaptive_mean:
                 mean_final = None

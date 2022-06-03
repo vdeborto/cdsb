@@ -24,26 +24,26 @@ var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size
 
 # device
 device: cuda
-num_workers: 16
+num_workers: 4
 pin_memory: True
 
 # logging
 log_stride: 100
 gif_stride: 10000
-plot_npar: 1000
+plot_npar: 200
 test_npar: 100
 
 # training
-cache_refresh_stride: 2500
-cache_npar: 256
-num_cache_batches: 20
+cache_refresh_stride: 1250
+cache_npar: 250
+num_cache_batches: 8
 use_prev_net: True
 ema: True
 ema_rate: 0.999
 grad_clipping: True
 grad_clip: 1.0
-batch_size: 128
-num_iter: 50000
+batch_size: 32
+num_iter: 20000
 n_ipf: 25
 lr: 0.0001
 

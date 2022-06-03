@@ -371,15 +371,14 @@ class IPFBase:
             batch_y = batch[1]
             init_batch_x = batch_x
 
-            if self.cond_final:
+            if mean_final is None or std_final is None:
+                assert self.cond_final
                 mean, std = self.final_cond_model(batch_y)
                 mean, std = mean.detach(), std.detach()
 
-                if self.args.final_adaptive:
-                    mean_final = mean
-                    std_final = std
-                elif self.args.adaptive_mean:
-                    mean_final = mean
+                mean_final = mean if mean_final is None else mean_final
+                std_final = std if std_final is None else std_final
+
         elif self.final_ds is not None:
             batch = next(final_dl)
             batch_x = batch[0]
@@ -396,11 +395,8 @@ class IPFBase:
             mean, std = mean.detach(), std.detach()
             batch_x = mean + std * torch.randn_like(init_batch_x)
 
-            if self.args.final_adaptive:
-                mean_final = mean
-                std_final = std
-            elif self.args.adaptive_mean:
-                mean_final = mean
+            mean_final = mean if mean_final is None else mean_final
+            std_final = std if std_final is None else std_final
         else:
             init_batch = next(init_dl)
             init_batch_x = init_batch[0]
@@ -538,6 +534,7 @@ class IPFSequential(IPFBase):
             self.plot_and_test_step(i, n, fb)
 
     def ipf_step(self, forward_or_backward, n):
+        torch.cuda.empty_cache()
         new_dl = self.new_cacheloader(forward_or_backward, n)
 
         if (not self.first_pass) and (not self.args.use_prev_net):
@@ -656,6 +653,7 @@ class IPFAnalytic(IPFBase):
         return new_ds
 
     def ipf_step(self, forward_or_backward, n):
+        torch.cuda.empty_cache()
         new_dl = self.new_cacheloader(forward_or_backward, n)
 
         if not self.args.use_prev_net:

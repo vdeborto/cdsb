@@ -1,4 +1,5 @@
 import torch
+torch.autograd.set_detect_anomaly(True)
 import hydra
 import os, sys
 

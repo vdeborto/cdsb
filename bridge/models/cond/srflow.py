@@ -16,8 +16,12 @@ class SRFlowModel(nn.Module):
         self.temperature = temperature
 
     def forward(self, x):
-        x = normalize_tensor(x)
         x = torch.nn.functional.interpolate(x, (self.lr_size, self.lr_size))
-        out = self.model.get_sr(lq=x, heat=self.temperature)
-        out = unnormalize_tensor(out)
+        x = normalize_tensor(x)
+        while True:
+            out = self.model.get_sr(lq=x, heat=self.temperature)
+            out = unnormalize_tensor(out)
+            if not torch.any(torch.isnan(out)):
+                break
+            print("SRFlowModel output nan, retrying")
         return out

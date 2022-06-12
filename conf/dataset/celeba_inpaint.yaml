@@ -47,12 +47,6 @@ x_cond_true:
 transfer: False
 Dataset_transfer: mnist
 cond_final: False
-cond_final_model:
-  MODEL: BasicRegress
-  mean_scale: 1.
-  std_scale: 0.4768
-  adaptive_std: False
-  checkpoint: experiments/celeba_inpaint_center/2022-04-22/cfg-gamma_max=0.005,num_iter=100000/16-35-44/checkpoints/version_0/sample_cond_final_model_40000.ckpt
 
 
 adaptive_mean: False
@@ -62,7 +56,7 @@ var_final: 1*torch.ones([${data.channels}, ${data.image_size}, ${data.image_size
 
 # device
 device: cuda
-num_workers: 8
+num_workers: 0
 pin_memory: True
 
 # logging
@@ -79,7 +73,7 @@ use_prev_net: True
 ema: True
 ema_rate: 0.999
 grad_clipping: True
-grad_clip: 1.0
+grad_clip: 0.1
 batch_size: 128
 num_iter: 50000
 n_ipf: 25

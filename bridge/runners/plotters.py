@@ -422,7 +422,7 @@ class ImPlotter(Plotter):
         self.num_plots_grid = 100
 
         self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
-                             "ssim": SSIM(data_range=255.).to(self.ipf.device),
+                             "ssim": SSIM(data_range=255., compute_on_cpu=True).to(self.ipf.device),
                              "fid": FID().to(self.ipf.device),
                              "lpips": LPIPS().to(self.ipf.device)}
 
@@ -1260,7 +1260,7 @@ class BasicImPlotter(BasicPlotter):
         self.num_plots_grid = 100
 
         self.metrics_dict = {"psnr": PSNR(data_range=255.).to(self.ipf.device),
-                             "ssim": SSIM(data_range=255.).to(self.ipf.device),
+                             "ssim": SSIM(data_range=255., compute_on_cpu=True).to(self.ipf.device),
                              "fid": FID().to(self.ipf.device),
                              "lpips": LPIPS().to(self.ipf.device)}
 

@@ -13,12 +13,6 @@ x_cond_true: test_ds[:8][0]
 transfer: False
 Dataset_transfer: mnist
 cond_final: False
-cond_final_model:
-  MODEL: BasicRegress
-  mean_scale: 1.
-  std_scale: 2.
-  adaptive_std: True
-  checkpoint: null
 
 
 adaptive_mean: False
@@ -33,15 +27,15 @@ num_workers: 0
 pin_memory: True
 
 # logging
-log_stride: 10
+log_stride: 100
 gif_stride: 10000
 plot_npar: 100
 test_npar: 10000
 
 # training
 cache_refresh_stride: 500
-cache_npar: 1600
-num_cache_batches: 2
+cache_npar: 400
+num_cache_batches: 8
 use_prev_net: True
 ema: True
 ema_rate: 0.999

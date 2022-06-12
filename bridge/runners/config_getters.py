@@ -172,6 +172,8 @@ def get_cond_model(args):
         else:
             if image_size == 256:
                 channel_mult = (1, 1, 2, 2, 4, 4)
+            elif image_size == 160:
+                channel_mult = (1, 2, 2, 4)
             elif image_size == 64:
                 channel_mult = (1, 2, 2, 2)
             elif image_size == 32:

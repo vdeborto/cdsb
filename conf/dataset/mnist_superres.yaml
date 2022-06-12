@@ -28,7 +28,7 @@ num_workers: 0
 pin_memory: True
 
 # logging
-log_stride: 10
+log_stride: 100
 gif_stride: 10000
 plot_npar: 100
 test_npar: 10000

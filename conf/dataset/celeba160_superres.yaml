@@ -7,8 +7,40 @@ data:
   image_size: 160
   channels: 3
   random_flip: true
-y_cond: null
-x_cond_true: null
+y_cond:
+  - test_ds[1544][1]
+  - test_ds[7635][1]
+  - test_ds[3282][1]
+  - test_ds[3086][1]
+  - test_ds[17378][1]
+  - test_ds[10714][1]
+  - test_ds[19658][1]
+  - test_ds[12916][1]
+#   - test_ds[9830][1]
+#   - test_ds[6186][1]
+#   - test_ds[8617][1]
+#   - test_ds[7118][1]
+#   - test_ds[15497][1]
+#   - test_ds[17305][1]
+#   - test_ds[16745][1]
+#   - test_ds[6431][1]
+x_cond_true:
+  - test_ds[1544][0]
+  - test_ds[7635][0]
+  - test_ds[3282][0]
+  - test_ds[3086][0]
+  - test_ds[17378][0]
+  - test_ds[10714][0]
+  - test_ds[19658][0]
+  - test_ds[12916][0]
+#   - test_ds[9830][0]
+#   - test_ds[6186][0]
+#   - test_ds[8617][0]
+#   - test_ds[7118][0]
+#   - test_ds[15497][0]
+#   - test_ds[17305][0]
+#   - test_ds[16745][0]
+#   - test_ds[6431][0]
 
 
 # transfer
@@ -41,7 +73,7 @@ use_prev_net: True
 ema: True
 ema_rate: 0.999
 grad_clipping: True
-grad_clip: 1.0
+grad_clip: 0.1
 batch_size: 32
 num_iter: 20000
 n_ipf: 25

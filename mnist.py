@@ -24,47 +24,13 @@ def main(args):
     final_cond_model = None
     if args.cond_final:
         final_cond_model = get_final_cond_model(accelerator, args, init_ds)
-    if args.Model in ['PolyCond', 'BasisCond', 'KRRCond']:
-        ipf = IPFAnalytic(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
-                          final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
-    else:
-        ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
-                            final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
+    ipf = IPFSequential(init_ds, final_ds, mean_final, var_final, args, accelerator=accelerator,
+                        final_cond_model=final_cond_model, valid_ds=valid_ds, test_ds=test_ds)
     accelerator.print(accelerator.state)
     accelerator.print(ipf.net['b'])
     accelerator.print('Number of parameters:', sum(p.numel() for p in ipf.net['b'].parameters() if p.requires_grad))
     ipf.train()
 
 
-def hydra_argv_remapper(argv_map):
-    """
-    Call this function before main
-
-    argv_map is a dict that remaps specific args to something else that hydra will gracefully not choke on
-
-        ex: {'--foo':'standard.hydra.override.foo', '--bar':'example.bar'}
-    """
-
-    argv = []
-    for v in sys.argv:
-        if v[:2] == '--':
-            argv = argv + v.split('=')
-        else:
-            argv.append(v)
-
-    # Remap the args
-    for k, v in argv_map.items():
-        if k in argv:
-            i = argv.index(k)
-            if v is not None:
-                new_arg = f"{v}={argv[i + 1]}"
-                argv.append(new_arg)
-            del argv[i:i + 2]
-
-    # Replace sys.argv with our remapped argv
-    sys.argv = argv
-
-
 if __name__ == '__main__':
-    hydra_argv_remapper({'--local_rank': None})
     main()  
